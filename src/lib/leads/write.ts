@@ -41,6 +41,55 @@ export async function moveLeadStage(opts: {
   return { from, to: opts.to };
 }
 
+type MoneyFieldName = 'quote' | 'deal' | 'deposit';
+
+export async function patchLeadMoney(opts: {
+  placeId: string;
+  sdrEmail: string;
+  field: MoneyFieldName;
+  amount: number | null;
+}) {
+  const db = await getDb();
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  let setBlock: Record<string, unknown>;
+  if (opts.field === 'quote') {
+    setBlock = {
+      quote: { amount: opts.amount, currency: 'USD' as const, sentAt: opts.amount != null ? nowIso : null },
+    };
+  } else if (opts.field === 'deal') {
+    setBlock = {
+      deal: { amount: opts.amount, currency: 'USD' as const, closedAt: opts.amount != null ? nowIso : null },
+    };
+  } else {
+    setBlock = {
+      deposit: { amount: opts.amount, paidAt: opts.amount != null ? nowIso : null },
+    };
+  }
+
+  await db.collection(COLLECTIONS.sk_lead_state).updateOne(
+    { leadPlaceId: opts.placeId },
+    {
+      $set: {
+        ...setBlock,
+        leadPlaceId: opts.placeId,
+        updatedAt: now,
+        updatedBy: opts.sdrEmail,
+      },
+      $setOnInsert: { createdAt: now, stage: 'new' as GranularStage },
+    },
+    { upsert: true },
+  );
+
+  await writeActivity({
+    leadPlaceId: opts.placeId,
+    sdrEmail: opts.sdrEmail,
+    type: 'money_update',
+    payload: { field: opts.field, amount: opts.amount },
+  });
+}
+
 export async function patchLeadState(opts: {
   placeId: string;
   sdrEmail: string;

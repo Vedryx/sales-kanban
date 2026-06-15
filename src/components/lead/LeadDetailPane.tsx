@@ -22,7 +22,7 @@ export function LeadDetailPane({
 }: {
   placeId: string;
   onClose: () => void;
-  onBook: () => void;
+  onBook: (leadEmail?: string) => void;
   onPatched: (patch: Partial<LeadDetail>) => void;
 }) {
   const [lead, setLead] = useState<LeadDetail | null>(null);
@@ -76,6 +76,27 @@ export function LeadDetailPane({
       body: JSON.stringify(patch),
     });
     onPatched(patch);
+  }
+
+  async function patchMoney(field: 'quote' | 'deal' | 'deposit', amount: number | null) {
+    const res = await fetch(`/api/leads/${encodeURIComponent(placeId)}/money`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ field, amount }),
+    });
+    if (!res.ok) return;
+    // Optimistic local update.
+    setLead((prev) => {
+      if (!prev) return prev;
+      const nowIso = new Date().toISOString();
+      if (field === 'quote') {
+        return { ...prev, quote: { amount, currency: 'USD', sentAt: amount != null ? nowIso : null } };
+      }
+      if (field === 'deal') {
+        return { ...prev, deal: { amount, currency: 'USD', closedAt: amount != null ? nowIso : null } };
+      }
+      return { ...prev, deposit: { amount, paidAt: amount != null ? nowIso : null } };
+    });
   }
 
   const showClosedBanner = !!lead && LOST_OR_DNC.includes(lead.stage) && futureMeetings > 0;
@@ -155,7 +176,7 @@ export function LeadDetailPane({
           )}
 
           <button
-            onClick={onBook}
+            onClick={() => onBook(lead?.email)}
             className="self-start rounded-md px-4 py-2 text-[13px] font-bold"
             style={{ background: 'var(--color-amber)', color: '#1b1715' }}
           >
@@ -219,11 +240,23 @@ export function LeadDetailPane({
             <Fact label="Owner" value={lead?.ownerName ?? '—'} />
           </div>
 
-          {/* Money fields — placeholder iter 1 */}
+          {/* Money fields — editable; save on blur */}
           <div className="grid grid-cols-3 gap-3">
-            <MoneyField label="Quote" amount={lead?.quote?.amount ?? null} />
-            <MoneyField label="Deal" amount={lead?.deal?.amount ?? null} />
-            <MoneyField label="Deposit" amount={lead?.deposit?.amount ?? null} />
+            <MoneyField
+              label="Quote"
+              amount={lead?.quote?.amount ?? null}
+              onSave={(amt) => patchMoney('quote', amt)}
+            />
+            <MoneyField
+              label="Deal"
+              amount={lead?.deal?.amount ?? null}
+              onSave={(amt) => patchMoney('deal', amt)}
+            />
+            <MoneyField
+              label="Deposit"
+              amount={lead?.deposit?.amount ?? null}
+              onSave={(amt) => patchMoney('deposit', amt)}
+            />
           </div>
 
           {/* Next action */}
@@ -339,7 +372,37 @@ function Fact({ label, value, mono }: { label: string; value: string; mono?: boo
   );
 }
 
-function MoneyField({ label, amount }: { label: string; amount: number | null }) {
+function MoneyField({
+  label,
+  amount,
+  onSave,
+}: {
+  label: string;
+  amount: number | null;
+  onSave: (amount: number | null) => void;
+}) {
+  const [draft, setDraft] = useState<string>(amount != null ? String(amount) : '');
+
+  // Re-sync when the upstream amount changes (e.g. after a fetch).
+  useEffect(() => {
+    setDraft(amount != null ? String(amount) : '');
+  }, [amount]);
+
+  function commit() {
+    const trimmed = draft.trim();
+    if (trimmed === '') {
+      if (amount !== null) onSave(null);
+      return;
+    }
+    const parsed = Number(trimmed.replace(/,/g, ''));
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      // Reject — restore.
+      setDraft(amount != null ? String(amount) : '');
+      return;
+    }
+    if (parsed !== amount) onSave(parsed);
+  }
+
   return (
     <div
       className="rounded-md border px-3 py-2"
@@ -351,8 +414,21 @@ function MoneyField({ label, amount }: { label: string; amount: number | null })
       <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text3)' }}>
         {label}
       </div>
-      <div className="mono mt-1 text-[14px]" style={{ color: 'var(--color-amber)' }}>
-        {amount != null ? `$${amount.toLocaleString()}` : '—'}
+      <div className="mono mt-1 flex items-baseline gap-1 text-[14px]" style={{ color: 'var(--color-amber)' }}>
+        <span>$</span>
+        <input
+          inputMode="decimal"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          }}
+          placeholder="—"
+          className="mono w-full bg-transparent text-[14px] outline-none"
+          style={{ color: 'var(--color-amber)' }}
+          aria-label={`${label} amount in USD`}
+        />
       </div>
     </div>
   );

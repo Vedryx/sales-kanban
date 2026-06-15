@@ -9,7 +9,8 @@ export type ActivityType =
   | 'meeting_no_show'
   | 'phone_viewed'
   | 'quote_sent'
-  | 'deal_won';
+  | 'deal_won'
+  | 'money_update';
 
 export type Activity = {
   _id?: string;
