@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+/* === Vedryx Sales tokens (ported 1:1 from MVP HTML) === */
+@theme {
+  --color-bg: #1b1715;
+  --color-bg2: #221d1a;
+  --color-surface: #29231f;
+  --color-surface2: #322a25;
+  --color-surface3: #3a312b;
+  --color-border: #372e29;
+  --color-border2: #473b33;
+  --color-text: #f1eae3;
+  --color-text2: #bbafa4;
+  --color-text3: #897d72;
+  --color-amber: #e8a85c;
+  --color-amber-d: #caa86b;
+  --color-amber-soft: rgba(232, 168, 92, 0.13);
+  --color-green: #83c28d;
+  --color-green-soft: rgba(131, 194, 141, 0.13);
+  --color-red: #e38476;
+  --color-red-soft: rgba(227, 132, 118, 0.13);
+  --color-blue: #83a8d6;
+  --color-blue-soft: rgba(131, 168, 214, 0.13);
+  --color-purple: #b89cd8;
+
+  --font-sans: 'Hanken Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 9px;
+  --radius-lg: 11px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+/* Live pulse */
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.live-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-green);
+  box-shadow: 0 0 12px rgba(131, 194, 141, 0.85);
+  animation: pulse-live 1.6s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Scrollbar — quiet */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border2);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Native date/time inputs — match mono surface */
+input[type='date'],
+input[type='time'],
+input[type='datetime-local'] {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border2);
+  border-radius: 9px;
+  padding: 9px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
