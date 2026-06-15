@@ -19,6 +19,7 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   const [leads, setLeads] = useState(initialLeads);
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [bookingLeadId, setBookingLeadId] = useState<string | null>(null);
+  const [bookingLeadEmail, setBookingLeadEmail] = useState<string | undefined>(undefined);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -95,7 +96,12 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
                   key={lead.placeId}
                   lead={lead}
                   onOpen={() => setOpenLeadId(lead.placeId)}
-                  onBook={() => setBookingLeadId(lead.placeId)}
+                  onBook={() => {
+                    // From the card we don't have the email (cards omit PII).
+                    // Modal will receive undefined; user can paste it in.
+                    setBookingLeadEmail(undefined);
+                    setBookingLeadId(lead.placeId);
+                  }}
                 />
               ))}
             </Column>
@@ -107,7 +113,8 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
         <LeadDetailPane
           placeId={openLeadId}
           onClose={() => setOpenLeadId(null)}
-          onBook={() => {
+          onBook={(leadEmail) => {
+            setBookingLeadEmail(leadEmail);
             setBookingLeadId(openLeadId);
           }}
           onPatched={(patch) =>
@@ -121,8 +128,11 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
         <BookMeetingModal
           placeId={bookingLeadId}
           businessName={leads.find((l) => l.placeId === bookingLeadId)?.businessName ?? ''}
-          leadEmail={undefined}
-          onClose={() => setBookingLeadId(null)}
+          leadEmail={bookingLeadEmail}
+          onClose={() => {
+            setBookingLeadId(null);
+            setBookingLeadEmail(undefined);
+          }}
         />
       )}
     </div>
