@@ -1,11 +1,6 @@
-'use client';
-import { signIn } from 'next-auth/react';
-import { useState } from 'react';
+import { signInWithGoogle } from './actions';
 
 export default function SignInPage() {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   return (
     <div
       className="flex min-h-screen items-center justify-center px-6 py-20"
@@ -22,41 +17,21 @@ export default function SignInPage() {
         <p className="mb-6 text-[13.5px] leading-relaxed" style={{ color: 'var(--color-text2)' }}>
           Sign in with the Google account you&apos;ll use to send calendar invites.
         </p>
-        {error && (
-          <div
-            className="mb-3 rounded-md border px-3 py-2 text-[12px]"
-            style={{
-              background: 'var(--color-red-soft)',
-              color: 'var(--color-red)',
-              borderColor: 'var(--color-red)',
-            }}
+        <form action={signInWithGoogle}>
+          <button
+            type="submit"
+            className="flex w-full items-center justify-center gap-3 rounded-md py-3 text-[14px] font-semibold disabled:opacity-60"
+            style={{ background: 'var(--color-amber)', color: '#1b1715' }}
           >
-            {error}
-          </div>
-        )}
-        <button
-          disabled={loading}
-          onClick={async () => {
-            setLoading(true);
-            setError(null);
-            try {
-              await signIn('google', { callbackUrl: '/' });
-            } catch {
-              setError('Sign-in failed. Allow pop-ups and try again.');
-              setLoading(false);
-            }
-          }}
-          className="flex w-full items-center justify-center gap-3 rounded-md py-3 text-[14px] font-semibold disabled:opacity-60"
-          style={{ background: 'var(--color-amber)', color: '#1b1715' }}
-        >
-          <span
-            className="flex h-[18px] w-[18px] items-center justify-center rounded-sm bg-white text-[11px] font-bold"
-            style={{ color: '#1b1715' }}
-          >
-            G
-          </span>
-          {loading ? 'Redirecting to Google…' : 'Continue with Google'}
-        </button>
+            <span
+              className="flex h-[18px] w-[18px] items-center justify-center rounded-sm bg-white text-[11px] font-bold"
+              style={{ color: '#1b1715' }}
+            >
+              G
+            </span>
+            Continue with Google
+          </button>
+        </form>
         <div
           className="mt-5 rounded-md border px-3 py-3 text-left text-[11.5px] leading-relaxed"
           style={{
