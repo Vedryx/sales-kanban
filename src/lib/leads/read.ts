@@ -14,10 +14,10 @@ export async function getBoardLeads(): Promise<LeadCard[]> {
         from: COLLECTIONS.sk_lead_state,
         localField: 'placeId',
         foreignField: 'leadPlaceId',
-        as: 'lead_state',
+        as: 'state',
       },
     },
-    { $addFields: { state_data: { $arrayElemAt: ['$lead_state', 0] } } },
+    { $addFields: { state_data: { $arrayElemAt: ['$state', 0] } } },
     {
       $project: {
         _id: 0,
@@ -59,10 +59,10 @@ export async function getLeadDetail(placeId: string): Promise<LeadDetail | null>
           from: COLLECTIONS.sk_lead_state,
           localField: 'placeId',
           foreignField: 'leadPlaceId',
-          as: 'lead_state',
+          as: 'state',
         },
       },
-      { $addFields: { state_data: { $arrayElemAt: ['$lead_state', 0] } } },
+      { $addFields: { state_data: { $arrayElemAt: ['$state', 0] } } },
       { $limit: 1 },
     ]).next()) as RawLeadDoc | null;
     if (!doc) return null;

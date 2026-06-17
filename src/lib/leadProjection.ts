@@ -9,7 +9,7 @@ export type RawLeadDoc = {
   name?: string;
   business?: string;
   city?: string;
-  state?: unknown;
+  state?: string;
   pagespeed?: number;
   pagespeedScore?: number;
   pagespeedFlag?: 'red' | 'amber' | 'green';
@@ -30,18 +30,14 @@ export type RawLeadDoc = {
   };
 };
 
-function optionalText(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
-}
-
 export function toCard(raw: RawLeadDoc): LeadCard {
   const placeId = raw.placeId ?? raw.place_id ?? '';
   const s = raw.state_data ?? {};
   return {
     placeId,
     businessName: raw.name ?? raw.business ?? 'Unknown business',
-    city: optionalText(raw.city),
-    state: optionalText(raw.state),
+    city: raw.city,
+    state: raw.state,
     pagespeed: raw.pagespeed ?? raw.pagespeedScore,
     pagespeedFlag: raw.pagespeedFlag,
     website: raw.website,
