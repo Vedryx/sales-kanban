@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -22,11 +22,15 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   const [bookingLeadId, setBookingLeadId] = useState<string | null>(null);
   const [bookingLeadEmail, setBookingLeadEmail] = useState<string | undefined>(undefined);
 
-  // Mouse: 4px distance threshold (unchanged).
+  // Mouse: 4px distance threshold — preserved from prior PointerSensor config
+  // so desktop drag activation feels identical to main.
   // Touch: 200ms press-hold before drag activates — lets users scroll the
   // column lane horizontally with a swipe without immediately starting a drag.
+  // MouseSensor (mouse-only) + TouchSensor (touch-only) is the canonical
+  // dnd-kit pattern for swipe-vs-drag. PointerSensor would accept touch
+  // pointerdown and race the TouchSensor delay, breaking lane scroll.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
