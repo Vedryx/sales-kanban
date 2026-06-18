@@ -18,7 +18,7 @@ export function Kpis({ leads }: { leads: LeadCard[] }) {
   ];
 
   return (
-    <div className="mt-4 grid grid-cols-4 gap-3">
+    <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
       {tiles.map((t) => (
         <div
           key={t.label}

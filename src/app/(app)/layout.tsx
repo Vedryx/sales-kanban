@@ -9,7 +9,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <Providers>
-      <div className="flex h-screen w-screen overflow-hidden">
+      <div className="flex h-screen w-screen flex-col overflow-hidden lg:flex-row">
         <Sidebar />
         <main className="flex-1 overflow-hidden">{children}</main>
       </div>

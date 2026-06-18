@@ -108,12 +108,12 @@ export function LeadDetailPane({
         style={{ background: 'rgba(12,9,8,0.55)', backdropFilter: 'blur(2px)' }}
       />
       <aside
-        className="relative flex h-full w-[520px] max-w-[100vw] flex-col overflow-y-auto border-l"
+        className="relative flex h-full w-[520px] max-w-[100vw] flex-col overflow-y-auto border-l max-sm:w-full"
         style={{ background: 'var(--color-bg2)', borderColor: 'var(--color-border2)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <header
-          className="flex items-start justify-between border-b px-6 py-5"
+          className="flex items-start justify-between border-b max-sm:px-4 max-sm:py-4 sm:px-6 sm:py-5"
           style={{ borderColor: 'var(--color-border)' }}
         >
           <div>
@@ -151,11 +151,11 @@ export function LeadDetailPane({
           </div>
         )}
 
-        <div className="flex flex-col gap-5 p-6">
+        <div className="flex flex-col max-sm:gap-4 max-sm:p-4 sm:gap-5 sm:p-6">
           {/* Phone */}
           {lead?.phone && (
             <div className="flex items-center gap-3">
-              <div className="mono flex-1 text-[26px] font-bold tracking-tight">{lead.phone}</div>
+              <div className="mono flex-1 text-[26px] font-bold tracking-tight max-sm:text-[22px]">{lead.phone}</div>
               <button
                 onClick={() => {
                   if (lead.phone) {
@@ -241,7 +241,7 @@ export function LeadDetailPane({
           </div>
 
           {/* Money fields — editable; save on blur */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid gap-3 max-sm:grid-cols-1 sm:grid-cols-3">
             <MoneyField
               label="Quote"
               amount={lead?.quote?.amount ?? null}
@@ -262,7 +262,7 @@ export function LeadDetailPane({
           {/* Next action */}
           <div>
             <Label>Next action</Label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 max-sm:flex-col">
               <input
                 type="datetime-local"
                 value={nextAt ? new Date(nextAt).toISOString().slice(0, 16) : ''}
@@ -320,7 +320,7 @@ export function LeadDetailPane({
                     borderColor: 'var(--color-border)',
                   }}
                 >
-                  <div className="flex justify-between">
+                  <div className="flex justify-between max-sm:flex-col max-sm:items-start max-sm:gap-0.5">
                     <span className="font-semibold">{a.type}</span>
                     <span className="mono text-[10.5px]" style={{ color: 'var(--color-text3)' }}>
                       {new Date(a.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}

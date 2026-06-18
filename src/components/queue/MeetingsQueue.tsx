@@ -44,10 +44,10 @@ export function MeetingsQueue({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header
-        className="border-b px-7 py-5"
+        className="border-b max-lg:px-4 max-lg:py-4 lg:px-7 lg:py-5"
         style={{ borderColor: 'var(--color-border)' }}
       >
-        <div className="flex items-end justify-between">
+        <div className="flex items-end justify-between max-sm:flex-col max-sm:items-start max-sm:gap-1">
           <div>
             <h1 className="m-0 text-[23px] font-extrabold tracking-tight">Today&apos;s Meetings</h1>
             <p className="mt-1 text-[13px]" style={{ color: 'var(--color-text3)' }}>
@@ -61,7 +61,7 @@ export function MeetingsQueue({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-7 py-5">
+      <div className="flex-1 overflow-y-auto max-lg:px-4 max-lg:py-4 lg:px-7 lg:py-5">
         <div className="mx-auto max-w-[780px]">
           {isEmpty ? (
             <EmptyState />
@@ -212,22 +212,22 @@ function NowStrip({ m }: { m: Meeting }) {
 function MeetingRow({ m, dim }: { m: Meeting; dim?: boolean }) {
   return (
     <div
-      className="mb-2 flex items-center gap-4 rounded-xl border px-4 py-3"
+      className="mb-2 flex gap-4 rounded-xl border px-4 py-3 max-md:flex-col max-md:gap-2 md:items-center"
       style={{
         background: 'var(--color-bg2)',
         borderColor: 'var(--color-border)',
         opacity: dim ? 0.55 : 1,
       }}
     >
-      <div className="w-[74px] shrink-0">
+      <div className="shrink-0 max-md:flex max-md:items-baseline max-md:gap-2 md:w-[74px]">
         <div className="mono text-[14px] font-semibold" style={{ color: 'var(--color-amber)' }}>
           {formatTimeRange(m.startAt, m.endAt)}
         </div>
-        <div className="mt-0.5 text-[10px]" style={{ color: 'var(--color-text3)' }}>
+        <div className="text-[10px] max-md:mt-0 md:mt-0.5" style={{ color: 'var(--color-text3)' }}>
           {m.durationMin}m
         </div>
       </div>
-      <div className="w-px self-stretch" style={{ background: 'var(--color-border2)' }} />
+      <div className="w-px self-stretch max-md:hidden" style={{ background: 'var(--color-border2)' }} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <TypeIcon t={m.meetingType} />
@@ -247,7 +247,7 @@ function MeetingRow({ m, dim }: { m: Meeting; dim?: boolean }) {
           target="_blank"
           rel="noreferrer"
           href={m.meetingUrl}
-          className="rounded-md border px-3 py-1.5 text-[12px]"
+          className="rounded-md border px-3 py-1.5 text-[12px] max-md:w-full max-md:text-center"
           style={{
             background: 'var(--color-surface)',
             borderColor: 'var(--color-border2)',
