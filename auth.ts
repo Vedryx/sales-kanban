@@ -1,11 +1,7 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import { GOOGLE_SCOPE_STRING } from '@/lib/google/scopes';
-
-const allowedDomains = (process.env.ALLOWED_EMAIL_DOMAINS || 'vedryxtech.com')
-  .split(',')
-  .map((s) => s.trim().toLowerCase())
-  .filter(Boolean);
+import { isAllowedEmail } from '@/lib/access/allowlist';
 
 async function refreshGoogleAccessToken(token: {
   refreshToken?: string;
@@ -65,10 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: { strategy: 'jwt' },
   callbacks: {
     async signIn({ user }) {
-      const email = user.email?.toLowerCase();
-      if (!email) return false;
-      const domain = email.split('@')[1];
-      return allowedDomains.includes(domain);
+      return isAllowedEmail(user.email);
     },
     async jwt({ token, account }) {
       if (account) {
