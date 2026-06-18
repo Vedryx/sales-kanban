@@ -11,15 +11,6 @@ const envSchema = z.object({
   AUTH_URL: z.string().url().optional(),
   GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID required'),
   GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET required'),
-  ALLOWED_EMAIL_DOMAINS: z
-    .string()
-    .default('vedryxtech.com')
-    .transform((v) =>
-      v
-        .split(',')
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean),
-    ),
   LOG_LEVEL: z.string().default('info'),
 });
 
