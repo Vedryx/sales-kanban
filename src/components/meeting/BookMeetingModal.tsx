@@ -104,14 +104,14 @@ export function BookMeetingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex justify-center max-sm:items-end sm:items-center" onClick={onClose}>
       <div
         className="absolute inset-0"
         style={{ background: 'rgba(12,9,8,0.55)', backdropFilter: 'blur(2px)' }}
       />
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-[520px] max-w-[94vw] overflow-hidden rounded-2xl border"
+        className="relative w-[520px] max-w-[94vw] overflow-hidden rounded-2xl border max-sm:w-full max-sm:max-w-full max-sm:max-h-[92vh] max-sm:rounded-b-none max-sm:rounded-t-2xl max-sm:flex max-sm:flex-col"
         style={{
           background: 'var(--color-bg2)',
           borderColor: 'var(--color-border2)',
@@ -119,7 +119,7 @@ export function BookMeetingModal({
         }}
       >
         <header
-          className="flex items-start justify-between border-b px-5 py-4"
+          className="flex items-start justify-between border-b max-sm:px-4 max-sm:py-3 sm:px-5 sm:py-4"
           style={{ borderColor: 'var(--color-border)' }}
         >
           <div>
@@ -136,7 +136,7 @@ export function BookMeetingModal({
         </header>
 
         {state === 'form' && (
-          <div className="flex max-h-[540px] flex-col gap-4 overflow-y-auto px-5 py-4">
+          <div className="flex flex-col gap-4 overflow-y-auto max-sm:flex-1 max-sm:px-4 max-sm:py-3 sm:max-h-[540px] sm:px-5 sm:py-4">
             <Field label="Title">
               <div
                 className="flex items-center rounded-md border"
@@ -166,7 +166,7 @@ export function BookMeetingModal({
             </Field>
 
             <Field label="Duration">
-              <div className="flex gap-2">
+              <div className="flex gap-2 max-sm:flex-wrap">
                 {[15, 30, 45, 60].map((d) => (
                   <Chip key={d} selected={duration === d} onClick={() => setDuration(d as Duration)}>
                     {d}m
@@ -176,7 +176,7 @@ export function BookMeetingModal({
             </Field>
 
             <Field label="Type">
-              <div className="flex gap-2">
+              <div className="flex gap-2 max-sm:flex-wrap">
                 <Chip selected={type === 'gmeet'} onClick={() => setType('gmeet')}>
                   <Video size={12} /> G-Meet
                 </Chip>
@@ -332,7 +332,7 @@ export function BookMeetingModal({
 
         {state === 'form' && (
           <footer
-            className="flex items-center justify-end gap-2 border-t px-5 py-3"
+            className="flex items-center justify-end gap-2 border-t max-sm:px-4 max-sm:py-3 sm:px-5 sm:py-3"
             style={{ borderColor: 'var(--color-border)' }}
           >
             <button

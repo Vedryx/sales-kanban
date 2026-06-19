@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -21,7 +22,17 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   const [bookingLeadId, setBookingLeadId] = useState<string | null>(null);
   const [bookingLeadEmail, setBookingLeadEmail] = useState<string | undefined>(undefined);
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+  // Mouse: 4px distance threshold — preserved from prior PointerSensor config
+  // so desktop drag activation feels identical to main.
+  // Touch: 200ms press-hold before drag activates — lets users scroll the
+  // column lane horizontally with a swipe without immediately starting a drag.
+  // MouseSensor (mouse-only) + TouchSensor (touch-only) is the canonical
+  // dnd-kit pattern for swipe-vs-drag. PointerSensor would accept touch
+  // pointerdown and race the TouchSensor delay, breaking lane scroll.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
 
   const byColumn = useMemo(() => {
     const map: Record<StageId, LeadCard[]> = {
@@ -63,21 +74,22 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <header
-        className="border-b px-7 py-5"
+        className="border-b max-lg:px-4 max-lg:py-3 lg:px-7 lg:py-5"
         style={{ borderColor: 'var(--color-border)' }}
       >
-        <div className="flex items-end justify-between">
+        <div className="flex items-end justify-between max-sm:flex-col max-sm:items-start max-sm:gap-2">
           <div>
             <h1 className="m-0 text-[23px] font-extrabold tracking-tight">Pipeline</h1>
             <p className="mt-1 text-[13px]" style={{ color: 'var(--color-text3)' }}>
-              {leads.length} leads · drag cards between columns to update stage
+              {leads.length} leads
+              <span className="max-sm:hidden"> · drag cards between columns to update stage</span>
             </p>
           </div>
           <div className="flex gap-2">
             <button
               disabled
               title="coming soon"
-              className="cursor-not-allowed rounded-md border px-3 py-2 text-[12.5px] opacity-50"
+              className="cursor-not-allowed rounded-md border px-3 py-2 text-[12.5px] opacity-50 max-md:hidden"
               style={{ borderColor: 'var(--color-border2)', color: 'var(--color-text2)' }}
             >
               + Add lead
@@ -88,7 +100,7 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
       </header>
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        <div className="flex flex-1 gap-3 overflow-x-auto px-7 py-5">
+        <div className="flex flex-1 gap-3 overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:px-4 max-lg:py-3 lg:px-7 lg:py-5">
           {STAGES.map((stage) => (
             <Column key={stage.id} id={stage.id} label={stage.label} count={byColumn[stage.id].length}>
               {byColumn[stage.id].map((lead) => (

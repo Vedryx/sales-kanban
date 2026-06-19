@@ -19,7 +19,7 @@ export function Column({
   return (
     <div
       ref={setNodeRef}
-      className="flex w-[260px] shrink-0 flex-col rounded-xl border"
+      className="flex w-[260px] shrink-0 flex-col rounded-xl border max-sm:w-[85vw] max-sm:max-w-[320px] max-lg:snap-start"
       style={{
         background: 'var(--color-bg2)',
         borderColor: isOver ? 'var(--color-amber)' : 'var(--color-border)',

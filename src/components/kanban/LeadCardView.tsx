@@ -76,7 +76,7 @@ export function LeadCardView({
             e.stopPropagation();
             onBook();
           }}
-          className="flex items-center gap-1 rounded-md border px-2 py-1 text-[10.5px] font-semibold"
+          className="flex items-center gap-1 rounded-md border px-2 py-1 text-[10.5px] font-semibold max-lg:px-2.5 max-lg:py-1.5"
           style={{
             background: 'transparent',
             borderColor: 'var(--color-border2)',
