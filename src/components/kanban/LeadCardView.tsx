@@ -1,7 +1,7 @@
 'use client';
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Calendar } from 'lucide-react';
+import { Calendar, Mail } from 'lucide-react';
 import type { LeadCard } from '@/types/lead';
 
 export function LeadCardView({
@@ -44,14 +44,25 @@ export function LeadCardView({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="text-[13.5px] font-bold tracking-tight">{lead.businessName}</div>
-          {lead.pagespeed != null && (
-            <span
-              className="mono shrink-0 rounded px-2 py-0.5 text-[10.5px] font-bold"
-              style={{ background: 'var(--color-surface2)', color: psColor }}
-            >
-              PS={lead.pagespeed}
-            </span>
-          )}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {lead.hasPitchEmailSent && (
+              <span
+                title="Pitch email sent"
+                aria-label="Pitch email sent"
+                style={{ color: 'var(--color-text3)' }}
+              >
+                <Mail size={11} />
+              </span>
+            )}
+            {lead.pagespeed != null && (
+              <span
+                className="mono rounded px-2 py-0.5 text-[10.5px] font-bold"
+                style={{ background: 'var(--color-surface2)', color: psColor }}
+              >
+                PS={lead.pagespeed}
+              </span>
+            )}
+          </div>
         </div>
         <div className="mt-1 text-[11.5px]" style={{ color: 'var(--color-text3)' }}>
           {[lead.city, lead.state].filter(Boolean).join(', ') || '—'}

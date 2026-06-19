@@ -1,9 +1,22 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { X, Copy, AlertTriangle } from 'lucide-react';
+import { X, Copy, AlertTriangle, Mail } from 'lucide-react';
 import type { LeadDetail } from '@/types/lead';
 import type { Activity } from '@/types/activity';
 import { LOST_OR_DNC, type GranularStage } from '@/lib/stages';
+import { PitchEmailModal } from './PitchEmailModal';
+
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+function formatRelative(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(ms / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  return `${days}d ago`;
+}
 
 const DISPOSITIONS: { code: string; label: string; intent?: string; advanceTo?: GranularStage }[] = [
   { code: 'no_answer', label: 'No answer · +2h', intent: 'retry call' },
@@ -31,6 +44,9 @@ export function LeadDetailPane({
   const [note, setNote] = useState('');
   const [nextAt, setNextAt] = useState('');
   const [nextIntent, setNextIntent] = useState('');
+  const [email, setEmail] = useState<string>('');
+  const [pitchModalOpen, setPitchModalOpen] = useState(false);
+  const [pitchEmailEnabled, setPitchEmailEnabled] = useState<boolean>(false);
 
   useEffect(() => {
     let active = true;
@@ -44,6 +60,16 @@ export function LeadDetailPane({
         setNote(d.lead?.lastNote ?? '');
         setNextAt(d.lead?.nextActionAt ?? '');
         setNextIntent(d.lead?.nextActionIntent ?? '');
+        setEmail(d.lead?.email ?? '');
+      });
+    fetch('/api/pitch-email-config')
+      .then((r) => (r.ok ? r.json() : { enabled: false }))
+      .then((d) => {
+        if (!active) return;
+        setPitchEmailEnabled(!!d.enabled);
+      })
+      .catch(() => {
+        if (active) setPitchEmailEnabled(false);
       });
     return () => {
       active = false;
@@ -69,13 +95,23 @@ export function LeadDetailPane({
     lastNote: string;
     nextActionAt: string;
     nextActionIntent: string;
+    email: string | null;
   }>) {
     await fetch(`/api/leads/${encodeURIComponent(placeId)}/state`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(patch),
     });
-    onPatched(patch);
+    if ('email' in patch) {
+      setLead((prev) =>
+        prev ? { ...prev, email: patch.email ?? undefined } : prev,
+      );
+    }
+    // The board's optimistic update consumes the card-shape Partial. `email`
+    // never goes on the card, so strip it before passing up.
+    const { email: _omit, ...cardPatch } = patch as Record<string, unknown>;
+    void _omit;
+    onPatched(cardPatch as Partial<LeadDetail>);
   }
 
   async function patchMoney(field: 'quote' | 'deal' | 'deposit', amount: number | null) {
@@ -175,13 +211,76 @@ export function LeadDetailPane({
             </div>
           )}
 
-          <button
-            onClick={() => onBook(lead?.email)}
-            className="self-start rounded-md px-4 py-2 text-[13px] font-bold"
-            style={{ background: 'var(--color-amber)', color: '#1b1715' }}
-          >
-            + Book G-Meet
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => onBook(lead?.email)}
+              className="rounded-md px-4 py-2 text-[13px] font-bold"
+              style={{ background: 'var(--color-amber)', color: '#1b1715' }}
+            >
+              + Book G-Meet
+            </button>
+            <button
+              onClick={() => setPitchModalOpen(true)}
+              disabled={!pitchEmailEnabled || !email || !EMAIL_RE.test(email)}
+              title={
+                !pitchEmailEnabled
+                  ? 'Pitch email disabled — set PITCH_EMAIL_ENABLED=true in Vercel env to turn on'
+                  : !email || !EMAIL_RE.test(email)
+                    ? 'Add a valid recipient email below'
+                    : ''
+              }
+              className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-[13px] font-bold disabled:opacity-50"
+              style={{
+                background: 'var(--color-surface)',
+                borderColor: 'var(--color-amber)',
+                color: 'var(--color-amber)',
+              }}
+            >
+              <Mail size={14} /> Send pitch email
+            </button>
+          </div>
+
+          {/* Email */}
+          <div>
+            <Label>Email</Label>
+            <div className="flex items-center gap-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => {
+                  const trimmed = email.trim();
+                  if (trimmed === '' || EMAIL_RE.test(trimmed)) {
+                    patchState({ email: trimmed === '' ? null : trimmed });
+                  }
+                }}
+                placeholder="add or correct"
+                className="flex-1 rounded-md border px-3 py-2 text-[13px]"
+                style={{
+                  background: 'var(--color-surface)',
+                  borderColor:
+                    email === '' || EMAIL_RE.test(email)
+                      ? 'var(--color-border2)'
+                      : 'var(--color-red)',
+                  color: 'var(--color-text)',
+                }}
+              />
+              {lead?.pitchEmailSentAt && (
+                <span
+                  className="mono shrink-0 text-[10.5px]"
+                  style={{ color: 'var(--color-text3)' }}
+                  title={new Date(lead.pitchEmailSentAt).toLocaleString()}
+                >
+                  ✉ {formatRelative(lead.pitchEmailSentAt)}
+                </span>
+              )}
+            </div>
+            {lead?.pitchEmailLastError && (
+              <div className="mt-1 text-[10.5px]" style={{ color: 'var(--color-red)' }}>
+                last error: {lead.pitchEmailLastError}
+              </div>
+            )}
+          </div>
 
           {/* Dispositions */}
           <div>
@@ -340,6 +439,28 @@ export function LeadDetailPane({
           </div>
         </div>
       </aside>
+
+      {pitchModalOpen && lead && lead.email && (
+        <PitchEmailModal
+          placeId={placeId}
+          businessName={lead.businessName}
+          website={lead.website}
+          recipientEmail={lead.email}
+          pagespeed={{
+            score: lead.pagespeed ?? 0,
+            flag: lead.pagespeedFlag ?? 'red',
+            metrics: lead.pagespeedMetrics,
+          }}
+          alreadySentAt={lead.pitchEmailSentAt ?? null}
+          onClose={() => setPitchModalOpen(false)}
+          onSent={(sentAt) => {
+            setLead((prev) =>
+              prev ? { ...prev, pitchEmailSentAt: sentAt, pitchEmailLastError: null } : prev,
+            );
+            onPatched({ hasPitchEmailSent: true } as Partial<LeadDetail>);
+          }}
+        />
+      )}
     </div>
   );
 }

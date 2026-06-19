@@ -97,6 +97,9 @@ export async function patchLeadState(opts: {
     nextActionAt: string | null;
     nextActionIntent: string | null;
     lastNote: string | null;
+    email: string | null;
+    pitchEmailSentAt: string | null;
+    pitchEmailLastError: string | null;
     quote: { amount: number | null; currency: 'USD'; sentAt: string | null };
     deal: { amount: number | null; currency: 'USD'; closedAt: string | null };
     deposit: { amount: number | null; paidAt: string | null };
