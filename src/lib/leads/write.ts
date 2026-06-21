@@ -1,8 +1,57 @@
 import 'server-only';
+import { randomUUID } from 'crypto';
 import { getDb } from '@/lib/mongo';
 import { COLLECTIONS } from '@/lib/collections';
+import { toCard, type RawLeadDoc } from '@/lib/leadProjection';
+import type { LeadCard } from '@/types/lead';
 import type { GranularStage } from '@/lib/stages';
 import { writeActivity } from '@/lib/activities/write';
+
+// Manually-added lead. Inserts a base doc into valid_pulse_leads (the same
+// collection the scraper feeds) so the existing board read/join works unchanged.
+// placeId is prefixed `manual:` + a UUID so it can never collide with a Google
+// place_id and the scraper cron will never overwrite it.
+export async function createManualLead(opts: {
+  businessName: string;
+  website: string;
+  email: string;
+  city?: string;
+  state?: string;
+  phone?: string;
+  ownerName?: string;
+  sdrEmail: string;
+  sdrName?: string;
+}): Promise<LeadCard> {
+  const db = await getDb();
+  const now = new Date();
+  const placeId = `manual:${randomUUID()}`;
+
+  const doc: RawLeadDoc & { source: string; createdAt: Date; createdBy: string } = {
+    placeId,
+    name: opts.businessName,
+    website: opts.website,
+    email: opts.email,
+    city: opts.city,
+    state: opts.state,
+    phone: opts.phone,
+    ownerName: opts.ownerName,
+    source: 'manual',
+    createdAt: now,
+    createdBy: opts.sdrEmail,
+  };
+
+  await db.collection(COLLECTIONS.valid_pulse_leads).insertOne(doc);
+
+  await writeActivity({
+    leadPlaceId: placeId,
+    sdrEmail: opts.sdrEmail,
+    sdrName: opts.sdrName,
+    type: 'lead_created',
+    payload: { businessName: opts.businessName, website: opts.website, source: 'manual' },
+  });
+
+  return toCard(doc);
+}
 
 export async function moveLeadStage(opts: {
   placeId: string;
