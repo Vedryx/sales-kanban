@@ -91,7 +91,8 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
       pagespeed: { score: 80, flag: 'green' },
     });
     expect(out.subject).toContain('Plain Text Co');
-    expect(out.text).toContain('pulse.vedryxtech.com');
+    expect(out.text).toContain('vedryxtech.com');
+    expect(out.text).not.toContain('pulse.vedryxtech.com');
     expect(out.text).toContain('80/100');
     expect(out.text).toContain("Not the right person or not interested");
   });

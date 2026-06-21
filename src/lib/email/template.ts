@@ -246,7 +246,7 @@ export function renderPitchEmail(inputs: RenderInputs): RenderedEmail {
   const demoUrl = safeUrl(inputs.demoUrl);
   const issues = renderIssues(inputs.pagespeed.metrics);
   const customNote = inputs.customNote?.trim();
-  const sdrName = inputs.sdrName?.trim() || 'Dev';
+  const sdrName = inputs.sdrName?.trim() || 'Dev Saini';
   const psScoreStr = esc(String(inputs.pagespeed.score));
 
   // Scorecard goes BELOW the 3-issue bullets and ABOVE the demo line — that's
@@ -287,7 +287,7 @@ ${demoLine}${shotsLine}${noteLine}<br><br>
 Happy to just hand over the rebuilt code, or run the technical side for you ongoing — whatever's easier on your end.<br><br>
 Not the right person or not interested? Reply and I won't follow up.<br><br>
 — ${esc(sdrName)}<br>
-pulse.vedryxtech.com
+vedryxtech.com
 </div>
 </body>
 </html>`;
@@ -345,7 +345,7 @@ function renderPlainText(p: {
     "Not the right person or not interested? Reply and I won't follow up.",
     '',
     `— ${p.sdrName}`,
-    'pulse.vedryxtech.com',
+    'vedryxtech.com',
   );
   return lines.join('\n');
 }

@@ -58,8 +58,11 @@ export async function sendEmail(opts: SendEmailOpts): Promise<{ id: string }> {
   if (!apiKey) {
     throw new Error('config_missing:RESEND_API_KEY');
   }
+  // Default address must be on a Resend-VERIFIED domain. team.vedryxtech.com is
+  // verified; pulse.vedryxtech.com is NOT (it 403s). Prod overrides via
+  // PITCH_EMAIL_FROM, but the fallback must still be sendable.
   const configuredFrom =
-    process.env.PITCH_EMAIL_FROM ?? 'Vedryx Pulse <hello@pulse.vedryxtech.com>';
+    process.env.PITCH_EMAIL_FROM ?? 'Vedryx Pulse <hello@team.vedryxtech.com>';
   const from = composeFrom(opts, configuredFrom);
 
   let res: Response;

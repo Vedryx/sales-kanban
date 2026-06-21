@@ -50,8 +50,10 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const fromConfigured = process.env.PITCH_EMAIL_FROM ?? 'Vedryx Pulse <hello@pulse.vedryxtech.com>';
-const sdrName = process.env.SDR_NAME ?? 'Dev';
+// Default to the Resend-VERIFIED sending domain (team.vedryxtech.com). The old
+// default (pulse.vedryxtech.com) is not verified in Resend and 403s on send.
+const fromConfigured = process.env.PITCH_EMAIL_FROM ?? 'Dev Saini <hello@team.vedryxtech.com>';
+const sdrName = process.env.SDR_NAME ?? 'Dev Saini';
 const replyTo = process.env.SDR_REPLY_TO;
 
 // Compose the From header — personal name over the verified sending address.
