@@ -7,6 +7,12 @@ const Body = z.object({
   nextActionAt: z.string().nullable().optional(),
   nextActionIntent: z.string().nullable().optional(),
   lastNote: z.string().nullable().optional(),
+  // SDR-set email override; lives on sk_lead_state and shadows valid_pulse_leads.email.
+  // Empty string → null (clears the override).
+  email: z
+    .union([z.string().email(), z.literal(''), z.null()])
+    .optional()
+    .transform((v) => (v === '' ? null : v)),
 });
 
 export const dynamic = 'force-dynamic';

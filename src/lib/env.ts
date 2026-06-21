@@ -12,6 +12,13 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().min(1, 'GOOGLE_CLIENT_ID required'),
   GOOGLE_CLIENT_SECRET: z.string().min(1, 'GOOGLE_CLIENT_SECRET required'),
   LOG_LEVEL: z.string().default('info'),
+  // Kill-switch for the pitch-email feature. Default OFF — any value other
+  // than the literal string 'true' is treated as disabled. Founder flips
+  // this in Vercel env after domain verification + RESEND_API_KEY are set.
+  PITCH_EMAIL_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
 });
 
 // During `next build` env may not be set yet for some imports; tolerate partial.
@@ -28,3 +35,4 @@ export const env = (parsed.success
   : (process.env as unknown)) as z.infer<typeof envSchema>;
 
 export const isPreview = env.PREVIEW_MODE === true;
+export const isPitchEmailEnabled = env.PITCH_EMAIL_ENABLED === true;
