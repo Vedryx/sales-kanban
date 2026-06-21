@@ -90,6 +90,31 @@ export async function moveLeadStage(opts: {
   return { from, to: opts.to };
 }
 
+// Writes PageSpeed results back onto the base lead doc in valid_pulse_leads.
+// Only ever targets manual leads in practice (scraped leads already carry a
+// score), but it keys by placeId so it is safe for either. `pagespeedAt`
+// records when the async run completed.
+export async function patchLeadPagespeed(opts: {
+  placeId: string;
+  score: number;
+  flag: 'red' | 'amber' | 'green';
+  metrics: Record<string, string | number>;
+}): Promise<void> {
+  const db = await getDb();
+  await db.collection(COLLECTIONS.valid_pulse_leads).updateOne(
+    { placeId: opts.placeId },
+    {
+      $set: {
+        pagespeed: opts.score,
+        pagespeedScore: opts.score,
+        pagespeedFlag: opts.flag,
+        pagespeedMetrics: opts.metrics,
+        pagespeedAt: new Date(),
+      },
+    },
+  );
+}
+
 type MoneyFieldName = 'quote' | 'deal' | 'deposit';
 
 export async function patchLeadMoney(opts: {
