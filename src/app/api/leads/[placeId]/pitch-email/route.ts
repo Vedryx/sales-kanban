@@ -127,6 +127,7 @@ export async function POST(
       subject: rendered.subject,
       html: rendered.html,
       text: rendered.text,
+      fromName: sdrName,
       replyTo: sdrEmail,
     });
 

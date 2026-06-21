@@ -15,18 +15,52 @@ export type SendEmailOpts = {
   html: string;
   text?: string;
   from?: string;
+  // Personal display name for the From header. Combined with the verified
+  // sending address so the email reads as a person (e.g. "Dev Saini
+  // <hello@pulse.vedryxtech.com>"), not the brand — a Primary-tab signal.
+  // Ignored when `from` is passed explicitly.
+  fromName?: string;
   replyTo?: string;
 };
+
+// Pull the bare address out of a possibly-display-named From string.
+// "Vedryx Pulse <hello@x.com>" -> "hello@x.com"; "hello@x.com" -> "hello@x.com".
+export function addressOf(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1] : from).trim();
+}
+
+// Make an arbitrary name safe to drop into a From display-name. Strips
+// header-injection chars (< > " \ CR LF) and quotes the name when it contains
+// RFC-5322 specials (comma, etc.) that would otherwise break the header.
+export function sanitizeDisplayName(name: string): string {
+  const cleaned = name.replace(/[<>"\\\r\n]/g, '').trim();
+  if (!cleaned) return '';
+  return /[(),:;@[\]]/.test(cleaned) ? `"${cleaned}"` : cleaned;
+}
+
+// Resolve the final From header. Explicit `from` wins; else a sanitized
+// display name over the configured sending address; else the configured From.
+export function composeFrom(
+  opts: { from?: string; fromName?: string },
+  configuredFrom: string,
+): string {
+  if (opts.from) return opts.from;
+  if (opts.fromName) {
+    const name = sanitizeDisplayName(opts.fromName);
+    if (name) return `${name} <${addressOf(configuredFrom)}>`;
+  }
+  return configuredFrom;
+}
 
 export async function sendEmail(opts: SendEmailOpts): Promise<{ id: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error('config_missing:RESEND_API_KEY');
   }
-  const from =
-    opts.from ??
-    process.env.PITCH_EMAIL_FROM ??
-    'Vedryx Pulse <hello@pulse.vedryxtech.com>';
+  const configuredFrom =
+    process.env.PITCH_EMAIL_FROM ?? 'Vedryx Pulse <hello@pulse.vedryxtech.com>';
+  const from = composeFrom(opts, configuredFrom);
 
   let res: Response;
   try {
