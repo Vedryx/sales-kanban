@@ -14,6 +14,7 @@ import { Column } from './Column';
 import { LeadCardView } from './LeadCardView';
 import { LeadDetailPane } from '../lead/LeadDetailPane';
 import { BookMeetingModal } from '../meeting/BookMeetingModal';
+import { AddLeadModal } from './AddLeadModal';
 import { Kpis } from './Kpis';
 
 export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
@@ -21,6 +22,7 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [bookingLeadId, setBookingLeadId] = useState<string | null>(null);
   const [bookingLeadEmail, setBookingLeadEmail] = useState<string | undefined>(undefined);
+  const [addingLead, setAddingLead] = useState(false);
 
   // Mouse: 4px distance threshold — preserved from prior PointerSensor config
   // so desktop drag activation feels identical to main.
@@ -87,9 +89,8 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
           </div>
           <div className="flex gap-2">
             <button
-              disabled
-              title="coming soon"
-              className="cursor-not-allowed rounded-md border px-3 py-2 text-[12.5px] opacity-50 max-md:hidden"
+              onClick={() => setAddingLead(true)}
+              className="rounded-md border px-3 py-2 text-[12.5px] font-bold"
               style={{ borderColor: 'var(--color-border2)', color: 'var(--color-text2)' }}
             >
               + Add lead
@@ -134,6 +135,12 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
               arr.map((l) => (l.placeId === openLeadId ? { ...l, ...patch } : l)),
             )
           }
+        />
+      )}
+      {addingLead && (
+        <AddLeadModal
+          onClose={() => setAddingLead(false)}
+          onCreated={(lead) => setLeads((arr) => [lead, ...arr])}
         />
       )}
       {bookingLeadId && (
