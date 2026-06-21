@@ -11,8 +11,23 @@
 // opt-out is "reply and I won't follow up" + Reply-To = the SDR.
 // If this ever becomes a bulk/templated blast, the CAN-SPAM footer
 // (unsubscribe + registered postal address) MUST be reinstated.
+//
+// SCORECARD (v2 inline) — between the 3-issue bullet list and the demo line we
+// render a compact <table> "stats at a glance" block. Rules enforced here so
+// Gmail keeps placing this in Primary:
+//   - NO <img>, NO <style> block, NO <script>. Inline CSS only.
+//   - bgcolor= attribute AND inline style="background:#xxx" — belt + suspenders
+//     for clients that strip one or the other.
+//   - Tints at ~10% saturation (not saturated banners — saturated banners
+//     trigger Promotions).
+//   - Unicode block characters (█▓▒░) for bar visualization, no image bars.
+//   - Plain-text fallback mirrors the scorecard structure; a well-formed
+//     text/plain that mirrors text/html is itself a Primary-tab signal.
+//   - Every sub-block is optional and degrades gracefully: missing
+//     `categories` → legacy single-score line; missing CrUX → lab-data
+//     fallback row; null securityGrade → row spans remaining cells.
 
-import type { PagespeedMetrics } from '@/types/lead';
+import type { PagespeedMetrics, PagespeedCategories, PagespeedField } from '@/types/lead';
 
 export type RenderInputs = {
   businessName: string;
@@ -21,7 +36,10 @@ export type RenderInputs = {
     score: number;
     flag: 'red' | 'amber' | 'green';
     metrics?: PagespeedMetrics;
+    categories?: PagespeedCategories;
+    field?: PagespeedField;
   };
+  securityGrade?: string | null;
   demoUrl?: string | null;
   screenshots?: Array<{ url: string; alt?: string }>;
   customNote?: string | null;
@@ -82,6 +100,144 @@ function renderIssues(metrics?: PagespeedMetrics): { html: string; text: string 
   };
 }
 
+// Score → desaturated tint color. ~10% saturation so the cell reads as a
+// faint background tint, never a saturated banner (saturated colored banners
+// are a strong Promotions-tab trigger in Gmail).
+function tintForScore(score: number): { bg: string; fg: string; label: 'green' | 'amber' | 'red' } {
+  if (score >= 90) return { bg: '#e8f3eb', fg: '#216234', label: 'green' };
+  if (score >= 50) return { bg: '#fdf2e0', fg: '#7a4d11', label: 'amber' };
+  return { bg: '#fbe7e3', fg: '#7a2a1f', label: 'red' };
+}
+
+// 5-cell bar using Unicode blocks. Score 0-100 → 0..5 filled cells.
+// `█` filled, `░` empty. Email clients render these consistently in system
+// fonts; no image required.
+function barForScore(score: number): string {
+  const filled = Math.max(0, Math.min(5, Math.round(score / 20)));
+  return '█'.repeat(filled) + '░'.repeat(5 - filled);
+}
+
+// LCP in ms → "1.8s" string. CrUX returns p75 LCP as milliseconds.
+function fmtMs(ms: number | undefined): string | null {
+  if (typeof ms !== 'number') return null;
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// One row of the scorecard. Defensive against undefined values from upstream.
+function scoreRow(label: string, score: number): string {
+  const tint = tintForScore(score);
+  const bar = barForScore(score);
+  // bgcolor= attribute mirrors the inline style so clients that strip one keep
+  // the tint. The bar cell uses a monospace stack so the blocks align.
+  return (
+    `<tr>` +
+    `<td bgcolor="${tint.bg}" style="background:${tint.bg};padding:6px 10px;font-size:13px;color:#222;border-top:1px solid #eee;">${esc(label)}</td>` +
+    `<td bgcolor="${tint.bg}" style="background:${tint.bg};padding:6px 10px;font-size:13px;font-weight:700;color:${tint.fg};border-top:1px solid #eee;text-align:right;width:50px;">${score}</td>` +
+    `<td bgcolor="${tint.bg}" style="background:${tint.bg};padding:6px 10px;font-size:13px;color:${tint.fg};font-family:Menlo,Consolas,monospace;border-top:1px solid #eee;width:70px;letter-spacing:1px;">${bar}</td>` +
+    `<td bgcolor="${tint.bg}" style="background:${tint.bg};padding:6px 10px;font-size:12px;color:${tint.fg};border-top:1px solid #eee;width:60px;">${tint.label}</td>` +
+    `</tr>`
+  );
+}
+
+// CrUX summary cell content (left half of bottom row). Falls back to lab LCP
+// when CrUX is absent (low-traffic domains — totally normal).
+function cruxOrLabSummary(
+  field: PagespeedField | undefined,
+  metrics: PagespeedMetrics | undefined,
+): string {
+  const cruxLcp = fmtMs(field?.lcpMs);
+  if (cruxLcp) {
+    return `Real users (28-day): LCP ${cruxLcp}`;
+  }
+  // Lab fallback: pull whatever LCP-shaped metric is present in legacy lab data.
+  const labLcp =
+    metrics?.['Largest Contentful Paint'] ?? metrics?.['LCP'] ?? metrics?.['lcp'];
+  if (labLcp !== undefined && labLcp !== null && String(labLcp).trim() !== '') {
+    return `Lab data: LCP ${esc(String(labLcp))}`;
+  }
+  return 'Lab data only';
+}
+
+// Build the scorecard <table>. Returns empty string when categories absent —
+// caller then falls back to the legacy single-score sentence (today's
+// behavior).
+function renderScorecard(inputs: RenderInputs): string {
+  const cats = inputs.pagespeed.categories;
+  if (!cats) return '';
+
+  const rows = [
+    scoreRow('Performance', cats.performance),
+    scoreRow('Accessibility', cats.accessibility),
+    scoreRow('Best Practices', cats.bestPractices),
+    scoreRow('SEO', cats.seo),
+  ].join('');
+
+  const cruxText = cruxOrLabSummary(inputs.pagespeed.field, inputs.pagespeed.metrics);
+  const grade = inputs.securityGrade ?? null;
+
+  // Bottom summary row: CrUX (or lab fallback) on the left, security grade on
+  // the right. If no security grade, the summary cell spans all 4 columns.
+  let summaryRow: string;
+  if (grade && grade.trim() !== '') {
+    summaryRow =
+      `<tr>` +
+      `<td colspan="2" bgcolor="#f7f7f7" style="background:#f7f7f7;padding:8px 10px;font-size:12px;color:#444;border-top:1px solid #eee;">${cruxText}</td>` +
+      `<td colspan="2" bgcolor="#f7f7f7" style="background:#f7f7f7;padding:8px 10px;font-size:12px;color:#444;border-top:1px solid #eee;text-align:right;">Security grade: <strong style="color:#222;">${esc(grade)}</strong></td>` +
+      `</tr>`;
+  } else {
+    summaryRow =
+      `<tr>` +
+      `<td colspan="4" bgcolor="#f7f7f7" style="background:#f7f7f7;padding:8px 10px;font-size:12px;color:#444;border-top:1px solid #eee;">${cruxText}</td>` +
+      `</tr>`;
+  }
+
+  const header =
+    `<tr>` +
+    `<td colspan="4" bgcolor="#fafafa" style="background:#fafafa;padding:6px 10px;font-size:11px;font-weight:700;letter-spacing:0.5px;color:#666;text-transform:uppercase;">Web audit — ${esc(inputs.businessName)}</td>` +
+    `</tr>`;
+
+  return (
+    `<table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin:10px 0;border:1px solid #eee;">` +
+    header +
+    rows +
+    summaryRow +
+    `</table>`
+  );
+}
+
+// Plain-text scorecard — mirrors the HTML structure. Some Gmail mobile
+// clients prefer text/plain when it's present and well-formed; a text/plain
+// that mirrors text/html is a Primary-tab signal.
+function renderScorecardText(inputs: RenderInputs): string {
+  const cats = inputs.pagespeed.categories;
+  if (!cats) return '';
+
+  const lines = [
+    `Web audit — ${inputs.businessName}`,
+    `  Performance:    ${String(cats.performance).padStart(3)} / 100`,
+    `  Accessibility:  ${String(cats.accessibility).padStart(3)} / 100`,
+    `  Best Practices: ${String(cats.bestPractices).padStart(3)} / 100`,
+    `  SEO:            ${String(cats.seo).padStart(3)} / 100`,
+  ];
+  const cruxLcp = fmtMs(inputs.pagespeed.field?.lcpMs);
+  if (cruxLcp) {
+    lines.push(`  Real users (28-day): LCP ${cruxLcp}`);
+  } else {
+    const labLcp =
+      inputs.pagespeed.metrics?.['Largest Contentful Paint'] ??
+      inputs.pagespeed.metrics?.['LCP'] ??
+      inputs.pagespeed.metrics?.['lcp'];
+    if (labLcp !== undefined && labLcp !== null && String(labLcp).trim() !== '') {
+      lines.push(`  Lab data: LCP ${labLcp}`);
+    }
+  }
+  if (inputs.securityGrade && inputs.securityGrade.trim() !== '') {
+    lines.push(`  Security grade: ${inputs.securityGrade}`);
+  }
+  return lines.join('\n');
+}
+
 export function renderPitchEmail(inputs: RenderInputs): RenderedEmail {
   // Soft, personal default subject. No score, no "we fixed it" — that reads as
   // an automated blast and pushes to Promotions. SDR can override in the modal.
@@ -90,8 +246,14 @@ export function renderPitchEmail(inputs: RenderInputs): RenderedEmail {
   const demoUrl = safeUrl(inputs.demoUrl);
   const issues = renderIssues(inputs.pagespeed.metrics);
   const customNote = inputs.customNote?.trim();
-  const sdrName = inputs.sdrName?.trim() || 'Dev';
+  const sdrName = inputs.sdrName?.trim() || 'Dev Saini';
   const psScoreStr = esc(String(inputs.pagespeed.score));
+
+  // Scorecard goes BELOW the 3-issue bullets and ABOVE the demo line — that's
+  // the founder-spec placement. Empty string when categories absent (legacy
+  // single-score path is the existing behavior).
+  const scorecard = renderScorecard(inputs);
+  const scorecardText = renderScorecardText(inputs);
 
   // One link, max. The rebuilt-site link is the single CTA; everything else is
   // plain text. Screenshots, if the SDR attached any, become a short text line
@@ -120,11 +282,12 @@ export function renderPitchEmail(inputs: RenderInputs): RenderedEmail {
 Hi,<br><br>
 I ran ${esc(inputs.businessName)}'s site through Google PageSpeed and it came back at <strong>${psScoreStr}/100</strong> on mobile. A few things dragging it down:
 ${issues.html}
+${scorecard}
 ${demoLine}${shotsLine}${noteLine}<br><br>
 Happy to just hand over the rebuilt code, or run the technical side for you ongoing — whatever's easier on your end.<br><br>
 Not the right person or not interested? Reply and I won't follow up.<br><br>
 — ${esc(sdrName)}<br>
-pulse.vedryxtech.com
+vedryxtech.com
 </div>
 </body>
 </html>`;
@@ -133,6 +296,7 @@ pulse.vedryxtech.com
     businessName: inputs.businessName,
     psScore: inputs.pagespeed.score,
     issuesText: issues.text,
+    scorecardText,
     demoUrl,
     shotLinks,
     customNote,
@@ -146,6 +310,7 @@ function renderPlainText(p: {
   businessName: string;
   psScore: number;
   issuesText: string;
+  scorecardText: string;
   demoUrl: string | null;
   shotLinks: string[];
   customNote?: string;
@@ -157,11 +322,16 @@ function renderPlainText(p: {
     `I ran ${p.businessName}'s site through Google PageSpeed and it came back at ${p.psScore}/100 on mobile. A few things dragging it down:`,
     '',
     p.issuesText,
+  ];
+  if (p.scorecardText) {
+    lines.push('', p.scorecardText);
+  }
+  lines.push(
     '',
     p.demoUrl
       ? `I went ahead and rebuilt it — here's the live version: ${p.demoUrl}`
       : `I went ahead and rebuilt it. Want me to send the live link?`,
-  ];
+  );
   if (p.shotLinks.length > 0) {
     lines.push('', `Before/after shots: ${p.shotLinks.join(' , ')}`);
   }
@@ -175,7 +345,7 @@ function renderPlainText(p: {
     "Not the right person or not interested? Reply and I won't follow up.",
     '',
     `— ${p.sdrName}`,
-    'pulse.vedryxtech.com',
+    'vedryxtech.com',
   );
   return lines.join('\n');
 }

@@ -29,7 +29,27 @@ const Body = z.object({
     score: z.number().int().min(0).max(100),
     flag: z.enum(['red', 'amber', 'green']),
     metrics: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
+    categories: z
+      .object({
+        performance: z.number().int().min(0).max(100),
+        accessibility: z.number().int().min(0).max(100),
+        bestPractices: z.number().int().min(0).max(100),
+        seo: z.number().int().min(0).max(100),
+      })
+      .optional(),
+    field: z
+      .object({
+        lcpMs: z.number().optional(),
+        inpMs: z.number().optional(),
+        fcpMs: z.number().optional(),
+        cls: z.number().optional(),
+      })
+      .optional(),
   }),
+  securityGrade: z
+    .union([z.string().max(4), z.literal(''), z.null()])
+    .optional()
+    .transform((v) => (v === '' ? null : v)),
 });
 
 export const dynamic = 'force-dynamic';
@@ -106,6 +126,9 @@ export async function POST(
   // so QA can verify rendering against real mail clients without risk.
   const recipient = isPreview ? sdrEmail : body.to;
 
+  // Scorecard data: prefer client-supplied (modal pulls from lead detail) but
+  // fall back to lead-detail-stored values if the client didn't pass them.
+  // This keeps server-side renders honest if the modal ever omits them.
   const rendered = renderPitchEmail({
     businessName: lead.businessName,
     website: lead.website,
@@ -113,7 +136,10 @@ export async function POST(
       score: body.pagespeed.score,
       flag: body.pagespeed.flag,
       metrics: body.pagespeed.metrics,
+      categories: body.pagespeed.categories ?? lead.pagespeedCategories,
+      field: body.pagespeed.field ?? lead.pagespeedField,
     },
+    securityGrade: body.securityGrade ?? lead.securityGrade ?? null,
     demoUrl: body.demoUrl ?? null,
     screenshots: body.screenshots,
     customNote: body.customNote ?? null,

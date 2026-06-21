@@ -30,3 +30,6 @@ yarn-error.log*
 
 # tests
 /coverage
+
+# email preview scratch (scripts/preview-email.mjs output)
+/tmp

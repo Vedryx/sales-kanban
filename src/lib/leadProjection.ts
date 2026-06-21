@@ -1,6 +1,12 @@
 // Single source of truth for what fields leave the DB.
 // NEVER return phone or raw email in card-shaped projections — only in detail.
-import type { LeadCard, LeadDetail, PagespeedMetrics } from '@/types/lead';
+import type {
+  LeadCard,
+  LeadDetail,
+  PagespeedMetrics,
+  PagespeedCategories,
+  PagespeedField,
+} from '@/types/lead';
 import type { GranularStage } from '@/lib/stages';
 
 export type RawLeadDoc = {
@@ -14,6 +20,9 @@ export type RawLeadDoc = {
   pagespeedScore?: number;
   pagespeedFlag?: 'red' | 'amber' | 'green';
   pagespeedMetrics?: PagespeedMetrics;
+  pagespeedCategories?: PagespeedCategories;
+  pagespeedField?: PagespeedField;
+  securityGrade?: string;
   website?: string;
   phone?: string;
   email?: string;
@@ -78,6 +87,9 @@ export function toDetail(raw: RawLeadDoc): LeadDetail {
     ownerName: raw.ownerName,
     timezone: raw.timezone,
     pagespeedMetrics: raw.pagespeedMetrics,
+    pagespeedCategories: raw.pagespeedCategories,
+    pagespeedField: raw.pagespeedField,
+    securityGrade: raw.securityGrade,
     pitchEmailSentAt: s.pitchEmailSentAt ?? null,
     pitchEmailLastError: s.pitchEmailLastError ?? null,
     quote: s.quote,

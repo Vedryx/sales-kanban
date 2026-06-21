@@ -1,8 +1,9 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { auth } from '../../../../auth';
-import { createManualLead, patchLeadPagespeed } from '@/lib/leads/write';
+import { createManualLead, patchLeadPagespeed, patchLeadSecurity } from '@/lib/leads/write';
 import { runPagespeed } from '@/lib/pagespeed/run';
+import { runObservatory } from '@/lib/observatory/run';
 
 // Mandatory: businessName, website, email. Everything else optional.
 // Optional text fields accept '' from the form and are coerced to undefined.
@@ -24,6 +25,7 @@ const Body = z.object({
 export const dynamic = 'force-dynamic';
 // PageSpeed runs in after() once the response is sent; mobile Lighthouse can
 // take 20-40s. Keep the function alive long enough to finish + write back.
+// Observatory runs in parallel via Promise.allSettled — adds no extra wall time.
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
@@ -44,17 +46,38 @@ export async function POST(req: Request) {
     sdrName: session.user.name ?? undefined,
   });
 
-  // Async PageSpeed score — runs after the response is sent so the SDR isn't
-  // blocked for ~30s. Best-effort: a failure leaves the lead unscored (the
-  // card simply shows no pagespeed flag) rather than failing the add.
+  // Async scoring — runs after the response is sent so the SDR isn't blocked.
+  // PSI (~20-40s) and Observatory (~2-8s) run in parallel via allSettled so
+  // either failing never affects the other or the lead add. Best-effort: any
+  // failure leaves the lead unscored / unrated rather than failing the flow.
   const { placeId, website } = card;
   if (website) {
     after(async () => {
-      try {
-        const ps = await runPagespeed(website);
-        await patchLeadPagespeed({ placeId, ...ps });
-      } catch (err) {
-        console.warn(`[pagespeed] failed for ${placeId}:`, (err as Error).message);
+      const [psiResult, obsResult] = await Promise.allSettled([
+        runPagespeed(website),
+        runObservatory(website),
+      ]);
+
+      if (psiResult.status === 'fulfilled') {
+        try {
+          await patchLeadPagespeed({ placeId, ...psiResult.value });
+        } catch (err) {
+          console.warn(`[pagespeed] persist failed for ${placeId}:`, (err as Error).message);
+        }
+      } else {
+        console.warn(`[pagespeed] failed for ${placeId}:`, psiResult.reason?.message ?? psiResult.reason);
+      }
+
+      // Observatory returns null on any failure; only persist a non-null grade.
+      if (obsResult.status === 'fulfilled' && obsResult.value) {
+        try {
+          await patchLeadSecurity({ placeId, grade: obsResult.value.grade, score: obsResult.value.score });
+        } catch (err) {
+          console.warn(`[observatory] persist failed for ${placeId}:`, (err as Error).message);
+        }
+      } else if (obsResult.status === 'rejected') {
+        // runObservatory swallows errors internally; this path is defensive only.
+        console.warn(`[observatory] unexpected reject for ${placeId}:`, obsResult.reason);
       }
     });
   }

@@ -91,7 +91,8 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
       pagespeed: { score: 80, flag: 'green' },
     });
     expect(out.subject).toContain('Plain Text Co');
-    expect(out.text).toContain('pulse.vedryxtech.com');
+    expect(out.text).toContain('vedryxtech.com');
+    expect(out.text).not.toContain('pulse.vedryxtech.com');
     expect(out.text).toContain('80/100');
     expect(out.text).toContain("Not the right person or not interested");
   });
@@ -107,6 +108,153 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
     expect(out.text).not.toContain('mailto:unsubscribe');
     // No logo banner / inline images either.
     expect(out.html).not.toContain('<img');
+  });
+});
+
+describe('renderPitchEmail — inline scorecard (Primary-tab shaped)', () => {
+  const fullScorecardInputs = {
+    businessName: 'Acme Co',
+    website: 'https://acme.example.com',
+    pagespeed: {
+      score: 34,
+      flag: 'red' as const,
+      metrics: { LCP: '4.1s', CLS: 0.18, TBT: '480ms' },
+      categories: { performance: 34, accessibility: 71, bestPractices: 83, seo: 91 },
+      field: { lcpMs: 6200, inpMs: 410, fcpMs: 2100, cls: 0.12 },
+    },
+    securityGrade: 'F',
+  };
+
+  it('renders the scorecard block with all 4 category scores + CrUX + security', () => {
+    const out = renderPitchEmail(fullScorecardInputs);
+    // Scorecard table header.
+    expect(out.html).toContain('Web audit');
+    expect(out.html).toContain('Acme Co');
+    // 4 category rows present.
+    expect(out.html).toContain('Performance');
+    expect(out.html).toContain('Accessibility');
+    expect(out.html).toContain('Best Practices');
+    expect(out.html).toContain('SEO');
+    // Scores rendered.
+    expect(out.html).toContain('>34<');
+    expect(out.html).toContain('>71<');
+    expect(out.html).toContain('>83<');
+    expect(out.html).toContain('>91<');
+    // CrUX LCP formatted (6200ms → 6.2s).
+    expect(out.html).toContain('Real users (28-day)');
+    expect(out.html).toContain('LCP 6.2s');
+    // Security row.
+    expect(out.html).toContain('Security grade');
+    expect(out.html).toContain('<strong style="color:#222;">F</strong>');
+    // Unicode bar present (any block char).
+    expect(out.html).toMatch(/[█░▓▒]/);
+  });
+
+  it('scorecard is safe for Gmail Primary: no <img>, no <style>, no <script>, exactly one <a>', () => {
+    const out = renderPitchEmail({
+      ...fullScorecardInputs,
+      demoUrl: 'https://pulse-demo.vedryxtech.com/acme',
+    });
+    expect(out.html).not.toContain('<img');
+    expect(out.html).not.toContain('<style');
+    expect(out.html).not.toContain('<script');
+    // Exactly one <a> tag — the single demo URL CTA.
+    const anchorCount = (out.html.match(/<a\s/g) ?? []).length;
+    expect(anchorCount).toBe(1);
+  });
+
+  it('scorecard uses bgcolor= AND inline style="background:..." for client compat', () => {
+    const out = renderPitchEmail(fullScorecardInputs);
+    expect(out.html).toMatch(/bgcolor="#[a-f0-9]{6}"/i);
+    expect(out.html).toMatch(/style="[^"]*background:#[a-f0-9]{6}/i);
+  });
+
+  it('legacy: scorecard absent when categories undefined — falls back to original single-score line', () => {
+    const out = renderPitchEmail({
+      businessName: 'Legacy Co',
+      pagespeed: { score: 42, flag: 'red' },
+    });
+    // No scorecard table.
+    expect(out.html).not.toContain('Web audit');
+    expect(out.html).not.toMatch(/<table/);
+    // Legacy single-score sentence still present.
+    expect(out.html).toContain('42/100');
+    expect(out.text).not.toContain('Web audit');
+    expect(out.text).toContain('42/100');
+  });
+
+  it('CrUX-absent fallback: shows "Lab data: LCP {lab_lcp}" instead of real-users row', () => {
+    const out = renderPitchEmail({
+      businessName: 'No Crux Co',
+      pagespeed: {
+        score: 50,
+        flag: 'amber',
+        metrics: { 'Largest Contentful Paint': '3.4s', CLS: 0.05 },
+        categories: { performance: 50, accessibility: 80, bestPractices: 90, seo: 95 },
+        // field deliberately omitted — low-traffic domain
+      },
+      securityGrade: 'B',
+    });
+    expect(out.html).not.toContain('Real users');
+    expect(out.html).toContain('Lab data: LCP 3.4s');
+    expect(out.text).toContain('Lab data: LCP 3.4s');
+  });
+
+  it('security-null omit: row spans remaining cells; no "Security grade" text', () => {
+    const out = renderPitchEmail({
+      businessName: 'No Security Co',
+      pagespeed: {
+        score: 60,
+        flag: 'amber',
+        categories: { performance: 60, accessibility: 70, bestPractices: 80, seo: 90 },
+        field: { lcpMs: 2500 },
+      },
+      securityGrade: null,
+    });
+    expect(out.html).not.toContain('Security grade');
+    // Summary row should span colspan=4 when grade is absent.
+    expect(out.html).toMatch(/colspan="4"[^>]*>Real users \(28-day\)/);
+    expect(out.text).not.toContain('Security grade');
+    expect(out.text).toContain('Real users (28-day): LCP 2.5s');
+  });
+
+  it('plain-text mirrors the scorecard structure when categories present', () => {
+    const out = renderPitchEmail(fullScorecardInputs);
+    expect(out.text).toContain('Web audit');
+    expect(out.text).toContain('Performance:');
+    expect(out.text).toContain('Accessibility:');
+    expect(out.text).toContain('Best Practices:');
+    expect(out.text).toContain('SEO:');
+    expect(out.text).toContain('34 / 100');
+    expect(out.text).toContain('91 / 100');
+    expect(out.text).toContain('Real users (28-day): LCP 6.2s');
+    expect(out.text).toContain('Security grade: F');
+  });
+
+  it('scorecard placement: between issues bullet list and demo line', () => {
+    const out = renderPitchEmail({
+      ...fullScorecardInputs,
+      demoUrl: 'https://pulse-demo.vedryxtech.com/acme',
+    });
+    const issuesIdx = out.html.indexOf('dragging it down');
+    const cardIdx = out.html.indexOf('Web audit');
+    const demoIdx = out.html.indexOf("here's the live version");
+    expect(issuesIdx).toBeGreaterThan(-1);
+    expect(cardIdx).toBeGreaterThan(issuesIdx);
+    expect(demoIdx).toBeGreaterThan(cardIdx);
+  });
+
+  it('HTML-escapes businessName inside the scorecard header', () => {
+    const out = renderPitchEmail({
+      businessName: '<script>alert(1)</script>',
+      pagespeed: {
+        score: 30,
+        flag: 'red',
+        categories: { performance: 30, accessibility: 40, bestPractices: 50, seo: 60 },
+      },
+    });
+    expect(out.html).not.toContain('<script>alert(1)</script>');
+    expect(out.html).toContain('&lt;script&gt;');
   });
 });
 
