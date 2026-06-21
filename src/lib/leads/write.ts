@@ -94,22 +94,61 @@ export async function moveLeadStage(opts: {
 // Only ever targets manual leads in practice (scraped leads already carry a
 // score), but it keys by placeId so it is safe for either. `pagespeedAt`
 // records when the async run completed.
+//
+// `categories` (4 Lighthouse scores) and `field` (CrUX p75 metrics) are
+// optional — additive fields landed alongside the inline-scorecard work. They
+// persist as `pagespeedCategories` / `pagespeedField` so the legacy
+// `pagespeed` / `pagespeedScore` / `pagespeedMetrics` shape is untouched and
+// existing reads keep working.
 export async function patchLeadPagespeed(opts: {
   placeId: string;
   score: number;
   flag: 'red' | 'amber' | 'green';
   metrics: Record<string, string | number>;
+  categories?: {
+    performance: number;
+    accessibility: number;
+    bestPractices: number;
+    seo: number;
+  };
+  field?: {
+    lcpMs?: number;
+    inpMs?: number;
+    fcpMs?: number;
+    cls?: number;
+  };
+}): Promise<void> {
+  const db = await getDb();
+  const set: Record<string, unknown> = {
+    pagespeed: opts.score,
+    pagespeedScore: opts.score,
+    pagespeedFlag: opts.flag,
+    pagespeedMetrics: opts.metrics,
+    pagespeedAt: new Date(),
+  };
+  if (opts.categories) set.pagespeedCategories = opts.categories;
+  if (opts.field) set.pagespeedField = opts.field;
+  await db.collection(COLLECTIONS.valid_pulse_leads).updateOne(
+    { placeId: opts.placeId },
+    { $set: set },
+  );
+}
+
+// Writes a Mozilla Observatory security grade back onto the base lead doc.
+// Best-effort: caller only invokes this when a grade was actually returned.
+export async function patchLeadSecurity(opts: {
+  placeId: string;
+  grade: string;
+  score: number;
 }): Promise<void> {
   const db = await getDb();
   await db.collection(COLLECTIONS.valid_pulse_leads).updateOne(
     { placeId: opts.placeId },
     {
       $set: {
-        pagespeed: opts.score,
-        pagespeedScore: opts.score,
-        pagespeedFlag: opts.flag,
-        pagespeedMetrics: opts.metrics,
-        pagespeedAt: new Date(),
+        securityGrade: opts.grade,
+        securityScore: opts.score,
+        securityAt: new Date(),
       },
     },
   );

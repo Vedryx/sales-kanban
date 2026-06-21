@@ -22,6 +22,20 @@ export type LeadCard = {
 
 export type PagespeedMetrics = Record<string, number | string>;
 
+export type PagespeedCategories = {
+  performance: number;
+  accessibility: number;
+  bestPractices: number;
+  seo: number;
+};
+
+export type PagespeedField = {
+  lcpMs?: number;
+  inpMs?: number;
+  fcpMs?: number;
+  cls?: number;
+};
+
 // Detail pane projection — phone allowed (server → server fetch only).
 export type LeadDetail = LeadCard & {
   phone?: string;
@@ -29,6 +43,9 @@ export type LeadDetail = LeadCard & {
   ownerName?: string;
   timezone?: string;
   pagespeedMetrics?: PagespeedMetrics;
+  pagespeedCategories?: PagespeedCategories;
+  pagespeedField?: PagespeedField;
+  securityGrade?: string;
   pitchEmailSentAt?: string | null;
   pitchEmailLastError?: string | null;
   quote?: { amount: number | null; currency: 'USD'; sentAt: string | null };

@@ -450,7 +450,10 @@ export function LeadDetailPane({
             score: lead.pagespeed ?? 0,
             flag: lead.pagespeedFlag ?? 'red',
             metrics: lead.pagespeedMetrics,
+            categories: lead.pagespeedCategories,
+            field: lead.pagespeedField,
           }}
+          securityGrade={lead.securityGrade ?? null}
           alreadySentAt={lead.pitchEmailSentAt ?? null}
           onClose={() => setPitchModalOpen(false)}
           onSent={(sentAt) => {

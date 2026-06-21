@@ -31,6 +31,9 @@ export async function getBoardLeads(): Promise<LeadCard[]> {
         pagespeedScore: 1,
         pagespeedFlag: 1,
         pagespeedMetrics: 1,
+        pagespeedCategories: 1,
+        pagespeedField: 1,
+        securityGrade: 1,
         website: 1,
         email: 1, // only existence — `hasEmail` derived; we don't render the value on the card
         state_data: 1,

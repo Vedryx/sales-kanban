@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-test.mjs",
-    "init-mongo": "node --env-file=.env.local scripts/init-mongo.mjs"
+    "init-mongo": "node --env-file=.env.local scripts/init-mongo.mjs",
+    "preview-email": "node scripts/preview-email.mjs",
+    "send-test-email": "node scripts/send-test-email.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

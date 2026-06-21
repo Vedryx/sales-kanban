@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, Mail, Plus, Upload as UploadIcon, AlertTriangle, Eye, EyeOff } from 'lucide-react';
 import { upload } from '@vercel/blob/client';
 import { renderPitchEmail } from '@/lib/email/template';
-import type { PagespeedMetrics } from '@/types/lead';
+import type { PagespeedMetrics, PagespeedCategories, PagespeedField } from '@/types/lead';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -14,7 +14,14 @@ type Props = {
   businessName: string;
   website?: string;
   recipientEmail: string;
-  pagespeed: { score: number; flag: 'red' | 'amber' | 'green'; metrics?: PagespeedMetrics };
+  pagespeed: {
+    score: number;
+    flag: 'red' | 'amber' | 'green';
+    metrics?: PagespeedMetrics;
+    categories?: PagespeedCategories;
+    field?: PagespeedField;
+  };
+  securityGrade?: string | null;
   alreadySentAt?: string | null;
   onClose: () => void;
   onSent: (sentAt: string) => void;
@@ -26,6 +33,7 @@ export function PitchEmailModal({
   website,
   recipientEmail,
   pagespeed,
+  securityGrade,
   alreadySentAt,
   onClose,
   onSent,
@@ -71,7 +79,14 @@ export function PitchEmailModal({
     return renderPitchEmail({
       businessName,
       website,
-      pagespeed: { score: psScore, flag: psFlag, metrics: pagespeed.metrics },
+      pagespeed: {
+        score: psScore,
+        flag: psFlag,
+        metrics: pagespeed.metrics,
+        categories: pagespeed.categories,
+        field: pagespeed.field,
+      },
+      securityGrade: securityGrade ?? null,
       demoUrl: demoUrl || null,
       screenshots: screenshots.filter((s) => s.status === 'ready'),
       customNote: customNote || null,
@@ -85,6 +100,9 @@ export function PitchEmailModal({
     psScore,
     psFlag,
     pagespeed.metrics,
+    pagespeed.categories,
+    pagespeed.field,
+    securityGrade,
     demoUrl,
     screenshots,
     customNote,
@@ -150,7 +168,14 @@ export function PitchEmailModal({
             .filter((s) => s.status === 'ready')
             .map(({ url, alt }) => ({ url, alt })),
           customNote: customNote || null,
-          pagespeed: { score: psScore, flag: psFlag, metrics: pagespeed.metrics },
+          pagespeed: {
+            score: psScore,
+            flag: psFlag,
+            metrics: pagespeed.metrics,
+            categories: pagespeed.categories,
+            field: pagespeed.field,
+          },
+          securityGrade: securityGrade ?? null,
         }),
       });
       const body = await res.json();
