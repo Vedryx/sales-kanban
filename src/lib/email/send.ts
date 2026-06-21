@@ -15,18 +15,33 @@ export type SendEmailOpts = {
   html: string;
   text?: string;
   from?: string;
+  // Personal display name for the From header. Combined with the verified
+  // sending address so the email reads as a person (e.g. "Dev Saini
+  // <hello@pulse.vedryxtech.com>"), not the brand — a Primary-tab signal.
+  // Ignored when `from` is passed explicitly.
+  fromName?: string;
   replyTo?: string;
 };
+
+// Pull the bare address out of a possibly-display-named From string.
+// "Vedryx Pulse <hello@x.com>" -> "hello@x.com"; "hello@x.com" -> "hello@x.com".
+function addressOf(from: string): string {
+  const m = from.match(/<([^>]+)>/);
+  return (m ? m[1] : from).trim();
+}
 
 export async function sendEmail(opts: SendEmailOpts): Promise<{ id: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     throw new Error('config_missing:RESEND_API_KEY');
   }
+  const configuredFrom =
+    process.env.PITCH_EMAIL_FROM ?? 'Vedryx Pulse <hello@pulse.vedryxtech.com>';
   const from =
     opts.from ??
-    process.env.PITCH_EMAIL_FROM ??
-    'Vedryx Pulse <hello@pulse.vedryxtech.com>';
+    (opts.fromName
+      ? `${opts.fromName} <${addressOf(configuredFrom)}>`
+      : configuredFrom);
 
   let res: Response;
   try {
