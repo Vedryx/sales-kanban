@@ -1,27 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { renderPitchEmail } from '../src/lib/email/template';
+import { addressOf, sanitizeDisplayName, composeFrom } from '../src/lib/email/send';
 
-describe('renderPitchEmail — golden fixtures', () => {
-  it('minimal: score + flag, no demo, no shots, no note', () => {
+describe('renderPitchEmail — plain personal template (Primary-tab shaped)', () => {
+  it('minimal: score, no demo, no shots, no note', () => {
     const out = renderPitchEmail({
       businessName: "Sally's Salon",
       website: 'https://sallys.example.com',
       pagespeed: { score: 42, flag: 'red' },
     });
-    // CMO subject variant A: "{biz} — your site scores {n}. We fixed it."
+    // Soft personal subject — no score, no "we fixed it".
     expect(out.subject).toContain("Sally's Salon");
-    expect(out.subject).toContain('42');
-    expect(out.subject).toContain('We fixed it');
-    expect(out.html).toContain("Sally&#39;s Salon");
-    expect(out.html).toContain('42');
-    expect(out.html).toContain('#c5594a'); // red flag color
-    // No demo URL → fallback reply prompt, no hyperlinked demo line.
-    expect(out.html).not.toContain('You can see the result here');
+    expect(out.subject).toContain('Quick note');
+    expect(out.subject).not.toContain('42');
+    expect(out.subject).not.toContain('We fixed it');
+    // Business name is escaped in the HTML body.
+    expect(out.html).toContain('Sally&#39;s Salon');
+    expect(out.html).toContain('42/100');
+    // No demo URL → reply-prompt fallback, no hyperlinked rebuilt-site line.
+    expect(out.html).not.toContain("here's the live version");
+    expect(out.html).toContain('Want me to send the live link?');
     expect(out.text).toContain('42/100');
-    expect(out.text).toContain('(RED)');
   });
 
-  it('full kitchen-sink: demo url + 2 screenshots + custom note + metrics', () => {
+  it('full: demo url + 2 screenshots + custom note + metrics', () => {
     const out = renderPitchEmail({
       businessName: 'Acme Co',
       website: 'https://acme.example.com',
@@ -38,23 +40,25 @@ describe('renderPitchEmail — golden fixtures', () => {
       customNote: 'Quick note about their pricing page.',
       sdrName: 'Dev S.',
     });
-    // CMO body: "We rebuilt it. You can see the result here: {demoUrl}"
-    expect(out.html).toContain('You can see the result here');
+    expect(out.html).toContain("here's the live version");
     expect(out.html).toContain('https://pulse-demo.vedryxtech.com/acme');
+    // Screenshots are text links, not inline <img>.
+    expect(out.html).not.toContain('<img');
     expect(out.html).toContain('https://blob.example/a.png');
     expect(out.html).toContain('https://blob.example/b.png');
+    expect(out.html).toContain('shot 1');
+    expect(out.html).toContain('shot 2');
     expect(out.html).toContain('LCP');
     expect(out.html).toContain('4.1s');
     expect(out.html).toContain('Quick note about their pricing page.');
     expect(out.html).toContain('Dev S.');
-    // CMO two-options close.
-    expect(out.html).toContain('Take the code');
-    expect(out.html).toContain('Let us run your tech');
+    // New plain close.
+    expect(out.html).toContain('hand over the rebuilt code');
     expect(out.text).toContain('Quick note about their pricing page.');
-    expect(out.text).toContain('Take the code');
+    expect(out.text).toContain('hand over the rebuilt code');
   });
 
-  it('refuses javascript: URLs in demoUrl + screenshots', () => {
+  it('refuses javascript: / data: URLs in demoUrl + screenshots', () => {
     const out = renderPitchEmail({
       businessName: 'Bad URL Co',
       website: 'https://x.example.com',
@@ -64,8 +68,8 @@ describe('renderPitchEmail — golden fixtures', () => {
     });
     expect(out.html).not.toContain('javascript:');
     expect(out.html).not.toContain('data:image');
-    // Hostile demo → fallback path, no "You can see the result here" line.
-    expect(out.html).not.toContain('You can see the result here');
+    // Hostile demo → fallback path.
+    expect(out.html).not.toContain("here's the live version");
   });
 
   it('HTML-escapes user content in businessName + customNote', () => {
@@ -75,10 +79,8 @@ describe('renderPitchEmail — golden fixtures', () => {
       pagespeed: { score: 30, flag: 'red' },
       customNote: '"><img src=x onerror=alert(1)>',
     });
-    // The literal markup must never appear unescaped.
     expect(out.html).not.toContain('<script>alert(1)</script>');
     expect(out.html).not.toContain('<img src=x');
-    // Escaped forms must appear.
     expect(out.html).toContain('&lt;script&gt;');
     expect(out.html).toContain('&quot;&gt;&lt;img');
   });
@@ -88,26 +90,55 @@ describe('renderPitchEmail — golden fixtures', () => {
       businessName: 'Plain Text Co',
       pagespeed: { score: 80, flag: 'green' },
     });
-    // Business name lives in the subject line, not the body (per CMO copy).
     expect(out.subject).toContain('Plain Text Co');
-    expect(out.text).toContain('Vedryx Pulse');
+    expect(out.text).toContain('pulse.vedryxtech.com');
     expect(out.text).toContain('80/100');
-    // CMO opt-out line + formal unsubscribe mailto (CAN-SPAM/GDPR).
-    expect(out.text).toContain("Not interested or wrong person");
-    expect(out.text).toContain('mailto:unsubscribe@vedryxtech.com');
+    expect(out.text).toContain("Not the right person or not interested");
   });
 
-  it('CAN-SPAM/GDPR footer: postal address placeholder + unsubscribe link', () => {
+  it('deliverability: no marketing footer (unsubscribe / postal address dropped)', () => {
     const out = renderPitchEmail({
       businessName: 'Footer Co',
       pagespeed: { score: 50, flag: 'amber' },
     });
-    // Postal address must be present in HTML and text, flagged TODO so the
-    // founder swaps the registered business address before live send.
-    expect(out.html).toContain('TODO_POSTAL_ADDRESS');
-    expect(out.text).toContain('TODO_POSTAL_ADDRESS');
-    // Real unsubscribe mailto in HTML and text fallback.
-    expect(out.html).toContain('mailto:unsubscribe@vedryxtech.com');
-    expect(out.text).toContain('mailto:unsubscribe@vedryxtech.com');
+    // The CAN-SPAM footer was intentionally removed for the 1:1 Primary motion.
+    expect(out.html).not.toContain('TODO_POSTAL_ADDRESS');
+    expect(out.html).not.toContain('mailto:unsubscribe');
+    expect(out.text).not.toContain('mailto:unsubscribe');
+    // No logo banner / inline images either.
+    expect(out.html).not.toContain('<img');
+  });
+});
+
+describe('From-header composition (send.ts)', () => {
+  const CONFIGURED = 'Vedryx Pulse <hello@pulse.vedryxtech.com>';
+
+  it('extracts the bare address from a display-named From', () => {
+    expect(addressOf(CONFIGURED)).toBe('hello@pulse.vedryxtech.com');
+    expect(addressOf('hello@pulse.vedryxtech.com')).toBe('hello@pulse.vedryxtech.com');
+  });
+
+  it('composes the SDR name over the verified address', () => {
+    expect(composeFrom({ fromName: 'Dev Saini' }, CONFIGURED)).toBe(
+      'Dev Saini <hello@pulse.vedryxtech.com>',
+    );
+  });
+
+  it('explicit from wins; empty/absent name falls back to configured From', () => {
+    expect(composeFrom({ from: 'X <x@y.com>', fromName: 'Dev' }, CONFIGURED)).toBe('X <x@y.com>');
+    expect(composeFrom({}, CONFIGURED)).toBe(CONFIGURED);
+  });
+
+  it('sanitizes header-injection + RFC specials in the display name', () => {
+    // angle brackets / quotes / CRLF stripped — no header injection. The
+    // surviving @ and : are RFC specials, so the whole name gets quoted.
+    expect(sanitizeDisplayName('Dev <evil@x.com>\r\nBcc: a@b.com')).toBe(
+      '"Dev evil@x.comBcc: a@b.com"',
+    );
+    // a comma forces quoting so the header stays one address.
+    expect(sanitizeDisplayName('Saini, Dev')).toBe('"Saini, Dev"');
+    expect(composeFrom({ fromName: 'Saini, Dev' }, CONFIGURED)).toBe(
+      '"Saini, Dev" <hello@pulse.vedryxtech.com>',
+    );
   });
 });

@@ -25,9 +25,32 @@ export type SendEmailOpts = {
 
 // Pull the bare address out of a possibly-display-named From string.
 // "Vedryx Pulse <hello@x.com>" -> "hello@x.com"; "hello@x.com" -> "hello@x.com".
-function addressOf(from: string): string {
+export function addressOf(from: string): string {
   const m = from.match(/<([^>]+)>/);
   return (m ? m[1] : from).trim();
+}
+
+// Make an arbitrary name safe to drop into a From display-name. Strips
+// header-injection chars (< > " \ CR LF) and quotes the name when it contains
+// RFC-5322 specials (comma, etc.) that would otherwise break the header.
+export function sanitizeDisplayName(name: string): string {
+  const cleaned = name.replace(/[<>"\\\r\n]/g, '').trim();
+  if (!cleaned) return '';
+  return /[(),:;@[\]]/.test(cleaned) ? `"${cleaned}"` : cleaned;
+}
+
+// Resolve the final From header. Explicit `from` wins; else a sanitized
+// display name over the configured sending address; else the configured From.
+export function composeFrom(
+  opts: { from?: string; fromName?: string },
+  configuredFrom: string,
+): string {
+  if (opts.from) return opts.from;
+  if (opts.fromName) {
+    const name = sanitizeDisplayName(opts.fromName);
+    if (name) return `${name} <${addressOf(configuredFrom)}>`;
+  }
+  return configuredFrom;
 }
 
 export async function sendEmail(opts: SendEmailOpts): Promise<{ id: string }> {
@@ -37,11 +60,7 @@ export async function sendEmail(opts: SendEmailOpts): Promise<{ id: string }> {
   }
   const configuredFrom =
     process.env.PITCH_EMAIL_FROM ?? 'Vedryx Pulse <hello@pulse.vedryxtech.com>';
-  const from =
-    opts.from ??
-    (opts.fromName
-      ? `${opts.fromName} <${addressOf(configuredFrom)}>`
-      : configuredFrom);
+  const from = composeFrom(opts, configuredFrom);
 
   let res: Response;
   try {
