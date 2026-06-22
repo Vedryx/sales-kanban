@@ -19,6 +19,11 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === 'true'),
+  // Reply-To header for outbound pitch emails. Routes replies to the shared
+  // sales inbox (where Resend inbound receiving forwards from) rather than
+  // the individual SDR's mailbox. Default points at the verified domain
+  // shared inbox; override in Vercel env if the routing target changes.
+  REPLY_TO_EMAIL: z.string().email().default('sales@vedryxtech.com'),
 });
 
 // During `next build` env may not be set yet for some imports; tolerate partial.

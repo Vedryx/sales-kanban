@@ -213,6 +213,14 @@ export async function patchLeadState(opts: {
     email: string | null;
     pitchEmailSentAt: string | null;
     pitchEmailLastError: string | null;
+    // Resend `id` of the most recent outbound pitch email. Inbound webhook
+    // reads this to match a reply by In-Reply-To header without scanning
+    // sk_activities.
+    lastOutboundResendId: string | null;
+    // ISO timestamp set by inbound webhook when a reply is matched to this
+    // lead. Cleared (or surpassed by lastReadReplyAt) when SDR opens detail.
+    unreadReplyAt: string | null;
+    lastReadReplyAt: string | null;
     quote: { amount: number | null; currency: 'USD'; sentAt: string | null };
     deal: { amount: number | null; currency: 'USD'; closedAt: string | null };
     deposit: { amount: number | null; paidAt: string | null };
