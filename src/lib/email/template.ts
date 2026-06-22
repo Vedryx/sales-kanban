@@ -315,9 +315,10 @@ I ran ${esc(inputs.businessName)}'s site through Google PageSpeed and it came ba
 ${issues.html}
 ${scorecard}
 ${demoLine}${shotsLine}${noteLine}<br><br>
-Happy to just hand over the rebuilt code, or run the technical side for you ongoing — whatever's easier on your end.<br><br>
+Quick context: we're Vedryxtech, a team out of India. Companies hand us their tech &amp; AI work so they can focus on the business — like the rebuild above, already done for you.<br><br>
+From here it's your call: take the rebuilt site and code and run it yourself, or make us your ongoing technical partner. Happy to walk you through either on a short Google Meet — send a couple of times that work for you and I'll lock it in.<br><br>
 Not the right person or not interested? Reply and I won't follow up.<br><br>
-— ${esc(sdrName)}<br>
+— ${esc(sdrName)}, Vedryxtech<br>
 vedryxtech.com
 </div>
 </body>
@@ -371,11 +372,13 @@ function renderPlainText(p: {
   }
   lines.push(
     '',
-    "Happy to just hand over the rebuilt code, or run the technical side for you ongoing — whatever's easier on your end.",
+    "Quick context: we're Vedryxtech, a team out of India. Companies hand us their tech & AI work so they can focus on the business — like the rebuild above, already done for you.",
+    '',
+    "From here it's your call: take the rebuilt site and code and run it yourself, or make us your ongoing technical partner. Happy to walk you through either on a short Google Meet — send a couple of times that work for you and I'll lock it in.",
     '',
     "Not the right person or not interested? Reply and I won't follow up.",
     '',
-    `— ${p.sdrName}`,
+    `— ${p.sdrName}, Vedryxtech`,
     'vedryxtech.com',
   );
   return lines.join('\n');
