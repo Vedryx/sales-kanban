@@ -5,12 +5,18 @@
 // It is a 1:1 cold-outreach email sent manually per lead, and the goal is the
 // Gmail *Primary* tab, not Promotions. Gmail's Primary-vs-Promotions split is
 // driven by content shape, so we keep it looking like a human typed it in
-// Gmail: no logo banner, no inline images, minimal links (ideally one), system
+// Gmail: no logo banner, minimal links (ideally one), system
 // font, single column, no marketing footer. Founder accepted dropping the
 // visible unsubscribe / postal-address footer for this low-volume 1:1 motion —
 // opt-out is "reply and I won't follow up" + Reply-To = the SDR.
 // If this ever becomes a bulk/templated blast, the CAN-SPAM footer
 // (unsubscribe + registered postal address) MUST be reinstated.
+//
+// SCREENSHOTS — when the SDR attaches before/after shots they render as inline
+// `<img>` tags (one per line, single column, max-width 560px) below the demo
+// line. No logo banners or marketing imagery; these are deliverable, plain
+// screenshots embedded the same way a human would paste them into Gmail. The
+// plain-text mirror keeps the link-list form (text/plain cannot embed images).
 //
 // SCORECARD (v2 inline) — between the 3-issue bullet list and the demo line we
 // render a compact <table> "stats at a glance" block. Rules enforced here so
@@ -256,21 +262,46 @@ export function renderPitchEmail(inputs: RenderInputs): RenderedEmail {
   const scorecardText = renderScorecardText(inputs);
 
   // One link, max. The rebuilt-site link is the single CTA; everything else is
-  // plain text. Screenshots, if the SDR attached any, become a short text line
-  // of links rather than inline images (images are a strong Promotions signal).
+  // plain text. Screenshots, if the SDR attached any, render as inline <img>
+  // tags below the demo line (one per line, single column). The plain-text
+  // mirror keeps the link-list form since text/plain cannot embed images.
   const demoLine = demoUrl
     ? `I went ahead and rebuilt it — here's the live version: <a href="${esc(demoUrl)}" style="color:#1a56db;">${esc(demoUrl)}</a>`
     : `I went ahead and rebuilt it. Want me to send the live link?`;
 
-  const shotLinks = (inputs.screenshots ?? [])
-    .map((s) => safeUrl(s.url))
-    .filter((u): u is string => !!u);
+  // Screenshot pipeline: keep BOTH the safe URL and the (possibly user-supplied)
+  // alt so the <img> renders with a meaningful alt attribute. Default alt is
+  // "screenshot N" (1-indexed) when input alt is missing/empty. URL goes
+  // through safeUrl() (http(s) only) then esc() for the src attr. If every
+  // screenshot fails the safeUrl gate the block emits nothing (no stray
+  // <br><br>) — same as today.
+  const safeShots = (inputs.screenshots ?? [])
+    .map((s, i) => {
+      const u = safeUrl(s.url);
+      if (!u) return null;
+      const rawAlt = (s.alt ?? '').trim();
+      const alt = rawAlt !== '' ? rawAlt : `screenshot ${i + 1}`;
+      return { url: u, alt };
+    })
+    .filter((s): s is { url: string; alt: string } => !!s);
+
+  // NO width=/height= attributes (they break mobile rendering); max-width via
+  // inline style only. display:block kills baseline gaps; border:0/outline:none
+  // suppresses default link-image borders in legacy clients.
   const shotsLine =
-    shotLinks.length > 0
-      ? `<br><br>A couple of before/after shots: ${shotLinks
-          .map((u, i) => `<a href="${esc(u)}" style="color:#1a56db;">shot ${i + 1}</a>`)
-          .join(', ')}`
+    safeShots.length > 0
+      ? `<br><br>` +
+        safeShots
+          .map(
+            (s) =>
+              `<img src="${esc(s.url)}" alt="${esc(s.alt)}" style="display:block;max-width:560px;width:100%;height:auto;border:0;outline:none;margin:10px 0;border-radius:4px;">`,
+          )
+          .join('')
       : '';
+
+  // Plain-text mirror still uses the link-list form — text/plain can't embed
+  // images. Mirror only includes the URL list.
+  const shotLinks = safeShots.map((s) => s.url);
 
   const noteLine = customNote ? `<br><br>${esc(customNote)}` : '';
 

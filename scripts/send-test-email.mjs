@@ -5,7 +5,7 @@
 //
 // Usage:
 //   RESEND_API_KEY=re_xxx node scripts/send-test-email.mjs --to=someone@gmail.com
-//   RESEND_API_KEY=re_xxx node scripts/send-test-email.mjs --to=a@gmail.com --variant=full|legacy|no-crux|no-security
+//   RESEND_API_KEY=re_xxx node scripts/send-test-email.mjs --to=a@gmail.com --variant=full|legacy|no-crux|no-security|full-inline-img
 //
 // Optional env:
 //   PITCH_EMAIL_FROM   default: "Vedryx Pulse <hello@pulse.vedryxtech.com>"
@@ -111,6 +111,19 @@ function pickSample(v) {
       return { ...baseSample, pagespeed: { ...baseSample.pagespeed, field: undefined } };
     case 'no-security':
       return { ...baseSample, securityGrade: null };
+    case 'full-inline-img':
+      // Same as `full` PLUS two inline screenshots. Uses picsum.photos so the
+      // images are real, publicly fetchable, and won't 404 in Gmail. The
+      // template now renders these as inline <img> tags (one per line, single
+      // column, max-width 560px). Use this variant to re-test Gmail Primary
+      // placement after the inline-image work.
+      return {
+        ...baseSample,
+        screenshots: [
+          { url: 'https://picsum.photos/seed/before/560/350', alt: 'before — current site hero' },
+          { url: 'https://picsum.photos/seed/after/560/350', alt: 'after — rebuilt hero' },
+        ],
+      };
     case 'full':
     default:
       return baseSample;
@@ -176,6 +189,9 @@ async function main() {
   console.log('  - Primary  ✓  (target)');
   console.log('  - Promotions ✗ (thin scorecard further — drop CrUX row, then bars, then colors)');
   console.log('  - Updates / Spam ✗ (check sending-domain DNS / Resend domain verification)');
+  console.log('\nVariants: full | legacy | no-crux | no-security | full-inline-img');
+  console.log('Placement re-test: try --variant=full-inline-img and confirm Primary placement.');
+  console.log('If it lands in Promotions, the link-form code path is still in place — revert via git or run --variant=full.');
 }
 
 main().catch((err) => {

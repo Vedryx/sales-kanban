@@ -7,7 +7,7 @@ const compat = new FlatCompat({ baseDirectory: __dirname });
 
 export default [
   {
-    ignores: ['.next/**', 'node_modules/**', 'scripts/**', 'next-env.d.ts'],
+    ignores: ['.next/**', 'node_modules/**', 'scripts/**', 'tmp/**', 'next-env.d.ts'],
   },
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
 ];

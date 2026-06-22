@@ -23,7 +23,7 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
     expect(out.text).toContain('42/100');
   });
 
-  it('full: demo url + 2 screenshots + custom note + metrics', () => {
+  it('full: demo url + 2 screenshots (inline <img>) + custom note + metrics', () => {
     const out = renderPitchEmail({
       businessName: 'Acme Co',
       website: 'https://acme.example.com',
@@ -42,12 +42,20 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
     });
     expect(out.html).toContain("here's the live version");
     expect(out.html).toContain('https://pulse-demo.vedryxtech.com/acme');
-    // Screenshots are text links, not inline <img>.
-    expect(out.html).not.toContain('<img');
-    expect(out.html).toContain('https://blob.example/a.png');
-    expect(out.html).toContain('https://blob.example/b.png');
-    expect(out.html).toContain('shot 1');
-    expect(out.html).toContain('shot 2');
+    // Screenshots render as inline <img> tags now (one per screenshot).
+    expect(out.html).toContain('<img');
+    expect(out.html).toContain('src="https://blob.example/a.png"');
+    expect(out.html).toContain('src="https://blob.example/b.png"');
+    // alt attribute is set (user-supplied alts preserved).
+    expect(out.html).toMatch(/<img[^>]*alt="home"/);
+    expect(out.html).toMatch(/<img[^>]*alt="contact"/);
+    // NO width=/height= attributes on the screenshot <img> tags.
+    expect(out.html).not.toMatch(/<img[^>]*\swidth="/);
+    expect(out.html).not.toMatch(/<img[^>]*\sheight="/);
+    // Plain-text mirror keeps the link-list form (text/plain cannot embed images).
+    expect(out.text).toContain('Before/after shots');
+    expect(out.text).toContain('https://blob.example/a.png');
+    expect(out.text).toContain('https://blob.example/b.png');
     expect(out.html).toContain('LCP');
     expect(out.html).toContain('4.1s');
     expect(out.html).toContain('Quick note about their pricing page.');
@@ -70,6 +78,8 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
     expect(out.html).not.toContain('data:image');
     // Hostile demo → fallback path.
     expect(out.html).not.toContain("here's the live version");
+    // safeUrl() strips the data: URL so no <img> is emitted.
+    expect(out.html).not.toContain('<img');
   });
 
   it('HTML-escapes user content in businessName + customNote', () => {
@@ -150,17 +160,44 @@ describe('renderPitchEmail — inline scorecard (Primary-tab shaped)', () => {
     expect(out.html).toMatch(/[█░▓▒]/);
   });
 
-  it('scorecard is safe for Gmail Primary: no <img>, no <style>, no <script>, exactly one <a>', () => {
+  it('scorecard is safe for Gmail Primary: no <img>/<style>/<script> in scorecard block, exactly one <a>', () => {
+    // No screenshots in this case — full Gmail-Primary safety surface
+    // (scorecard + body) stays image-free. Screenshot-as-<img> is exercised in
+    // the other suite; the scorecard table itself MUST never contain <img>.
     const out = renderPitchEmail({
       ...fullScorecardInputs,
       demoUrl: 'https://pulse-demo.vedryxtech.com/acme',
     });
+    // Whole HTML safe — no screenshots input means no <img> anywhere.
     expect(out.html).not.toContain('<img');
     expect(out.html).not.toContain('<style');
     expect(out.html).not.toContain('<script');
     // Exactly one <a> tag — the single demo URL CTA.
     const anchorCount = (out.html.match(/<a\s/g) ?? []).length;
     expect(anchorCount).toBe(1);
+  });
+
+  it('scorecard table itself contains no <img> even when screenshots are present', () => {
+    // Belt-and-suspenders: the scorecard <table> block must stay image-free
+    // even when the body has screenshot <img> tags below the demo line. This
+    // guards against anyone ever moving the screenshot block into the
+    // scorecard.
+    const out = renderPitchEmail({
+      ...fullScorecardInputs,
+      demoUrl: 'https://pulse-demo.vedryxtech.com/acme',
+      screenshots: [
+        { url: 'https://blob.example/a.png', alt: 'before' },
+        { url: 'https://blob.example/b.png', alt: 'after' },
+      ],
+    });
+    // Locate the scorecard <table>...</table> substring and assert <img>-free.
+    const tableMatch = out.html.match(/<table[\s\S]*?<\/table>/);
+    expect(tableMatch).not.toBeNull();
+    const scorecardHtml = tableMatch![0];
+    expect(scorecardHtml).not.toContain('<img');
+    // The two screenshot <img> tags ARE present in the body, just not in the table.
+    const imgCount = (out.html.match(/<img\b/g) ?? []).length;
+    expect(imgCount).toBe(2);
   });
 
   it('scorecard uses bgcolor= AND inline style="background:..." for client compat', () => {
@@ -255,6 +292,69 @@ describe('renderPitchEmail — inline scorecard (Primary-tab shaped)', () => {
     });
     expect(out.html).not.toContain('<script>alert(1)</script>');
     expect(out.html).toContain('&lt;script&gt;');
+  });
+});
+
+describe('renderPitchEmail — inline screenshot <img> attribute hygiene', () => {
+  it('defaults alt to "screenshot N" (1-indexed) when input alt is missing or empty', () => {
+    const out = renderPitchEmail({
+      businessName: 'AltCo',
+      pagespeed: { score: 50, flag: 'amber' },
+      screenshots: [
+        { url: 'https://blob.example/a.png' }, // alt missing
+        { url: 'https://blob.example/b.png', alt: '' }, // alt empty
+        { url: 'https://blob.example/c.png', alt: '   ' }, // alt whitespace-only
+      ],
+    });
+    expect(out.html).toMatch(/<img[^>]*src="https:\/\/blob\.example\/a\.png"[^>]*alt="screenshot 1"/);
+    expect(out.html).toMatch(/<img[^>]*src="https:\/\/blob\.example\/b\.png"[^>]*alt="screenshot 2"/);
+    expect(out.html).toMatch(/<img[^>]*src="https:\/\/blob\.example\/c\.png"[^>]*alt="screenshot 3"/);
+  });
+
+  it('emits max-width:560px in the inline style and no width=/height= attributes', () => {
+    const out = renderPitchEmail({
+      businessName: 'MaxCo',
+      pagespeed: { score: 50, flag: 'amber' },
+      screenshots: [{ url: 'https://blob.example/a.png', alt: 'shot' }],
+    });
+    expect(out.html).toMatch(/<img[^>]*style="[^"]*max-width:560px/);
+    expect(out.html).toMatch(/<img[^>]*style="[^"]*display:block/);
+    // Explicit: no width= / height= attributes on any <img>.
+    expect(out.html).not.toMatch(/<img[^>]*\swidth="/);
+    expect(out.html).not.toMatch(/<img[^>]*\sheight="/);
+  });
+
+  it('HTML-escapes user-supplied alt text', () => {
+    const out = renderPitchEmail({
+      businessName: 'EscCo',
+      pagespeed: { score: 50, flag: 'amber' },
+      screenshots: [
+        {
+          url: 'https://blob.example/a.png',
+          alt: '"><script>alert(1)</script>',
+        },
+      ],
+    });
+    // Raw payload not present.
+    expect(out.html).not.toContain('"><script>alert(1)</script>');
+    // The escaped form lives inside the alt attribute.
+    expect(out.html).toMatch(/<img[^>]*alt="&quot;&gt;&lt;script&gt;/);
+  });
+
+  it('emits nothing (no <br><br>) when every screenshot URL is rejected by safeUrl', () => {
+    // All screenshot URLs are hostile/non-http(s) → block emits nothing.
+    const out = renderPitchEmail({
+      businessName: 'AllBadCo',
+      pagespeed: { score: 50, flag: 'amber' },
+      screenshots: [
+        { url: 'javascript:alert(1)' },
+        { url: 'ftp://example.com/x.png' },
+        { url: 'data:image/png;base64,iVBOR...' },
+      ],
+    });
+    expect(out.html).not.toContain('<img');
+    // Plain-text mirror also has no screenshot block.
+    expect(out.text).not.toContain('Before/after shots');
   });
 });
 
