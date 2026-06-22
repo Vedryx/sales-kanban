@@ -6,7 +6,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' https://fonts.gstatic.com",
   "img-src 'self' data: https://*.googleusercontent.com https://*.public.blob.vercel-storage.com",
-  "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://blob.vercel-storage.com https://*.public.blob.vercel-storage.com",
+  "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://blob.vercel-storage.com https://*.public.blob.vercel-storage.com https://vercel.com",
   "frame-src https://accounts.google.com",
   "object-src 'none'",
   "base-uri 'self'",
