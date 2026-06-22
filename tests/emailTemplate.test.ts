@@ -60,10 +60,13 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
     expect(out.html).toContain('4.1s');
     expect(out.html).toContain('Quick note about their pricing page.');
     expect(out.html).toContain('Dev S.');
-    // New plain close.
-    expect(out.html).toContain('hand over the rebuilt code');
+    // Company intro + two-path close with Google Meet ask.
+    expect(out.html).toContain("we're Vedryxtech");
+    expect(out.html).toContain('ongoing technical partner');
+    expect(out.html).toContain('Google Meet');
     expect(out.text).toContain('Quick note about their pricing page.');
-    expect(out.text).toContain('hand over the rebuilt code');
+    expect(out.text).toContain("we're Vedryxtech");
+    expect(out.text).toContain('Google Meet');
   });
 
   it('refuses javascript: / data: URLs in demoUrl + screenshots', () => {
