@@ -315,10 +315,10 @@ I ran ${esc(inputs.businessName)}'s site through Google PageSpeed and it came ba
 ${issues.html}
 ${scorecard}
 ${demoLine}${shotsLine}${noteLine}<br><br>
-Quick context: we're Vedryxtech, a team out of India. Companies hand us their tech &amp; AI work so they can focus on the business — like the rebuild above, already done for you.<br><br>
-From here it's your call: take the rebuilt site and code and run it yourself, or make us your ongoing technical partner. Happy to walk you through either on a short Google Meet — send a couple of times that work for you and I'll lock it in.<br><br>
+For context — I run a small team (Vedryxtech, based in India) that handles the engineering side for founders who'd rather not.<br><br>
+Your call from here: take the rebuilt site and code and run it, or we keep building with you. If it's useful, reply with a couple of times and I'll set up a quick call.<br><br>
 Not the right person or not interested? Reply and I won't follow up.<br><br>
-— ${esc(sdrName)}, Vedryxtech<br>
+— ${esc(sdrName)}<br>
 vedryxtech.com
 </div>
 </body>
@@ -372,13 +372,13 @@ function renderPlainText(p: {
   }
   lines.push(
     '',
-    "Quick context: we're Vedryxtech, a team out of India. Companies hand us their tech & AI work so they can focus on the business — like the rebuild above, already done for you.",
+    "For context — I run a small team (Vedryxtech, based in India) that handles the engineering side for founders who'd rather not.",
     '',
-    "From here it's your call: take the rebuilt site and code and run it yourself, or make us your ongoing technical partner. Happy to walk you through either on a short Google Meet — send a couple of times that work for you and I'll lock it in.",
+    "Your call from here: take the rebuilt site and code and run it, or we keep building with you. If it's useful, reply with a couple of times and I'll set up a quick call.",
     '',
     "Not the right person or not interested? Reply and I won't follow up.",
     '',
-    `— ${p.sdrName}, Vedryxtech`,
+    `— ${p.sdrName}`,
     'vedryxtech.com',
   );
   return lines.join('\n');
