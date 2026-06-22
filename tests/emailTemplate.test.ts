@@ -60,13 +60,17 @@ describe('renderPitchEmail — plain personal template (Primary-tab shaped)', ()
     expect(out.html).toContain('4.1s');
     expect(out.html).toContain('Quick note about their pricing page.');
     expect(out.html).toContain('Dev S.');
-    // Company intro + two-path close with Google Meet ask.
-    expect(out.html).toContain("we're Vedryxtech");
-    expect(out.html).toContain('ongoing technical partner');
-    expect(out.html).toContain('Google Meet');
+    // Softened company intro + two-path close with a low-key call ask.
+    expect(out.html).toContain('I run a small team');
+    expect(out.html).toContain('Vedryxtech');
+    expect(out.html).toContain('keep building with you');
+    expect(out.html).toContain('quick call');
+    // Promotional triggers stripped for Primary placement.
+    expect(out.html).not.toContain('Google Meet');
+    expect(out.html).not.toContain(' AI ');
     expect(out.text).toContain('Quick note about their pricing page.');
-    expect(out.text).toContain("we're Vedryxtech");
-    expect(out.text).toContain('Google Meet');
+    expect(out.text).toContain('I run a small team');
+    expect(out.text).toContain('quick call');
   });
 
   it('refuses javascript: / data: URLs in demoUrl + screenshots', () => {
