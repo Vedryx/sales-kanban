@@ -24,6 +24,11 @@ const envSchema = z.object({
   // the individual SDR's mailbox. Default points at the verified domain
   // shared inbox; override in Vercel env if the routing target changes.
   REPLY_TO_EMAIL: z.string().email().default('sales@vedryxtech.com'),
+  // Resend webhook signing secret. Soft-optional in the zod schema (other
+  // sensitive keys here are also soft) so dev-mode imports don't blow up,
+  // but the /api/inbound/reply route returns 401 if it's not actually set
+  // when a request arrives.
+  RESEND_WEBHOOK_SECRET: z.string().optional(),
 });
 
 // During `next build` env may not be set yet for some imports; tolerate partial.
