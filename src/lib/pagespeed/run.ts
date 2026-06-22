@@ -7,8 +7,8 @@ import 'server-only';
 // Set PAGESPEED_API_KEY in Vercel to lift it. Mobile strategy mirrors what
 // the scraper records, so manual + scraped leads stay comparable.
 //
-// v2 (inline scorecard) — we now request all 4 Lighthouse categories in a
-// single call (PSI returns them all when `category` is omitted) and also
+// v2 (inline scorecard) — we request all 4 Lighthouse categories explicitly
+// (PSI returns ONLY performance unless each category is named) and also
 // capture CrUX field metrics from `loadingExperience.metrics` when present.
 // Every read is defensive (`?.`) because the Lighthouse JSON schema drifts
 // across point releases (esp. the in-flight 12.7+ insights migration) and a
@@ -93,7 +93,13 @@ export async function runPagespeed(website: string): Promise<PagespeedResult> {
   const url = new URL(PSI_ENDPOINT);
   url.searchParams.set('url', website);
   url.searchParams.set('strategy', 'mobile');
-  // No `category` param — PSI returns all 4 categories in one call when omitted.
+  // PSI defaults to PERFORMANCE-only. To get accessibility / best-practices /
+  // seo we MUST request each category explicitly (repeated `category` params);
+  // omitting them returns just performance — which silently empties the
+  // scorecard. Verified against the live API.
+  for (const c of ['PERFORMANCE', 'ACCESSIBILITY', 'BEST_PRACTICES', 'SEO']) {
+    url.searchParams.append('category', c);
+  }
   const key = process.env.PAGESPEED_API_KEY;
   if (key) url.searchParams.set('key', key);
 
