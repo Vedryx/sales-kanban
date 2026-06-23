@@ -1,24 +1,28 @@
 import 'server-only';
-import DOMPurify from 'isomorphic-dompurify';
+import sanitizeHtml from 'sanitize-html';
 
 // Inbound email is UNTRUSTED — every reply we render in the board passes
 // through this. Sanitize ONCE at the write path (the webhook handler);
 // store the sanitized HTML; never re-sanitize at render and never render
 // the raw `text`/`html` from Resend.
 //
+// Implementation note: uses `sanitize-html` (pure JS, htmlparser2) rather than
+// DOMPurify/jsdom — jsdom pulls an ESM-only transitive dep that breaks under
+// `require()` in the Vercel Node lambda (ERR_REQUIRE_ESM), 500-ing the whole
+// route at module load. sanitize-html has no DOM dependency and runs cleanly
+// in serverless.
+//
 // The allow-list is intentionally narrow:
 //   - basic block + inline formatting (p, br, ul/ol/li, blockquote, pre/code)
 //     so quoted-reply structure survives
-//   - bold/italic/underline/strong/em
-//   - anchors with href and basic attributes (NOFOLLOW + target=_blank
-//     forced via DOMPurify's hook below)
-// Stripped:
-//   - <script>, <iframe>, <object>, <embed>, <link>, <meta>, <form>
-//   - inline event handlers (onload, onclick, etc.)
-//   - <style> + style="" (XSS-via-CSS like background-image:url(javascript:))
+//   - bold/italic/underline/strong/em + headings
+//   - anchors with href (forced rel=nofollow noopener + target=_blank)
+// Stripped (not in the allow-list → discarded, text content kept):
+//   - <script>, <iframe>, <object>, <embed>, <link>, <meta>, <form>, <style>
 //   - <img> — inbound replies frequently embed tracking pixels; we don't
-//     want to render them and we don't want to do any network I/O at
-//     render time.
+//     render them and we don't want network I/O at render time
+//   - inline event handlers + style="" (only href/title/rel/target survive,
+//     and only on <a>)
 
 const ALLOWED_TAGS = [
   'p', 'br', 'div', 'span',
@@ -30,33 +34,25 @@ const ALLOWED_TAGS = [
   'hr',
 ];
 
-const ALLOWED_ATTR = ['href', 'title', 'rel', 'target'];
-
-// Force every surviving anchor to open in a new tab + use noopener+nofollow.
-// We attach the hook once on first use. DOMPurify's `addHook` is idempotent
-// within a process; we still guard with a flag so re-imports don't re-add.
-let hookInstalled = false;
-function installHook() {
-  if (hookInstalled) return;
-  DOMPurify.addHook('afterSanitizeAttributes', (node: Element) => {
-    if (node.nodeName === 'A') {
-      node.setAttribute('target', '_blank');
-      node.setAttribute('rel', 'noopener noreferrer nofollow');
-    }
-  });
-  hookInstalled = true;
-}
-
 export function sanitizeInboundHtml(raw: string | null | undefined): string {
   if (!raw) return '';
-  installHook();
-  return DOMPurify.sanitize(raw, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    // Allow data-uri images? No. Stripped via tag list above. Belt-and-braces.
-    FORBID_TAGS: ['img', 'script', 'style', 'iframe', 'object', 'embed', 'form', 'link', 'meta'],
-    FORBID_ATTR: ['style', 'onerror', 'onload', 'onclick', 'onmouseover'],
-    KEEP_CONTENT: true,
+  return sanitizeHtml(raw, {
+    allowedTags: ALLOWED_TAGS,
+    // Only anchors keep attributes; everything else is stripped (kills style,
+    // on* handlers, etc.). javascript:/data: blocked via allowedSchemes.
+    allowedAttributes: { a: ['href', 'title', 'rel', 'target'] },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowProtocolRelative: false,
+    // Drop disallowed tags but keep their text content (matches the prior
+    // DOMPurify KEEP_CONTENT behavior).
+    disallowedTagsMode: 'discard',
+    transformTags: {
+      // Force every surviving anchor to open in a new tab + noopener+nofollow.
+      a: (tagName, attribs) => ({
+        tagName: 'a',
+        attribs: { ...attribs, target: '_blank', rel: 'noopener noreferrer nofollow' },
+      }),
+    },
   });
 }
 
