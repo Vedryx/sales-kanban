@@ -3,6 +3,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { Calendar, Mail } from 'lucide-react';
 import type { LeadCard } from '@/types/lead';
+import { isUnreadReply } from '@/lib/leads/unread';
 
 export function LeadCardView({
   lead,
@@ -23,6 +24,8 @@ export function LeadCardView({
       : lead.pagespeedFlag === 'amber'
         ? 'var(--color-amber)'
         : 'var(--color-green)';
+
+  const unread = isUnreadReply(lead);
 
   return (
     <div
@@ -45,6 +48,23 @@ export function LeadCardView({
         <div className="flex items-start justify-between gap-2">
           <div className="text-[13.5px] font-bold tracking-tight">{lead.businessName}</div>
           <div className="flex shrink-0 items-center gap-1.5">
+            {unread && (
+              <span
+                title="New reply"
+                aria-label="New inbound reply"
+                className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wider"
+                style={{
+                  background: 'var(--color-amber)',
+                  color: '#1b1715',
+                }}
+              >
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-full"
+                  style={{ background: '#1b1715' }}
+                />
+                New
+              </span>
+            )}
             {lead.hasPitchEmailSent && (
               <span
                 title="Pitch email sent"

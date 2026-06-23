@@ -18,6 +18,11 @@ export type LeadCard = {
   assignedTo?: string | null;
   hasEmail: boolean;
   hasPitchEmailSent: boolean;
+  // ISO timestamp of the most recent inbound reply that hasn't been read.
+  // Cleared logically by lastReadReplyAt >= unreadReplyAt (mark-read endpoint).
+  // Card renders an "unread" badge whenever unreadReplyAt > (lastReadReplyAt ?? -inf).
+  unreadReplyAt?: string | null;
+  lastReadReplyAt?: string | null;
 };
 
 export type PagespeedMetrics = Record<string, number | string>;

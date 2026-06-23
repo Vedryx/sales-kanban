@@ -37,6 +37,8 @@ export type RawLeadDoc = {
     email?: string | null; // SDR override (lives on sk_lead_state)
     pitchEmailSentAt?: string | null;
     pitchEmailLastError?: string | null;
+    unreadReplyAt?: string | null;
+    lastReadReplyAt?: string | null;
     quote?: LeadDetail['quote'];
     deal?: LeadDetail['deal'];
     deposit?: LeadDetail['deposit'];
@@ -74,6 +76,8 @@ export function toCard(raw: RawLeadDoc): LeadCard {
     assignedTo: s.assignedTo ?? null,
     hasEmail: !!effectiveEmail(raw),
     hasPitchEmailSent: !!s.pitchEmailSentAt,
+    unreadReplyAt: s.unreadReplyAt ?? null,
+    lastReadReplyAt: s.lastReadReplyAt ?? null,
   };
 }
 
