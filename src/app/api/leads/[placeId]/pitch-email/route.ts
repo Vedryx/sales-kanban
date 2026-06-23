@@ -6,7 +6,7 @@ import { patchLeadState } from '@/lib/leads/write';
 import { writeActivity } from '@/lib/activities/write';
 import { renderPitchEmail } from '@/lib/email/template';
 import { sendEmail } from '@/lib/email/send';
-import { isPreview, isPitchEmailEnabled } from '@/lib/env';
+import { env, isPreview, isPitchEmailEnabled } from '@/lib/env';
 
 const Screenshot = z.object({
   url: z.string().url().max(1000),
@@ -154,14 +154,23 @@ export async function POST(
       html: rendered.html,
       text: rendered.text,
       fromName: sdrName,
-      replyTo: sdrEmail,
+      // Replies route to the shared sales inbox (Resend inbound forwards
+      // land there). Individual SDR mailbox is no longer the reply target —
+      // we want replies on the board, not in private SDR inboxes.
+      replyTo: env.REPLY_TO_EMAIL,
     });
 
     const sentAt = new Date().toISOString();
     await patchLeadState({
       placeId,
       sdrEmail,
-      patch: { pitchEmailSentAt: sentAt, pitchEmailLastError: null },
+      // lastOutboundResendId lets the inbound webhook do an O(1) lookup by
+      // In-Reply-To header without scanning the activities collection.
+      patch: {
+        pitchEmailSentAt: sentAt,
+        pitchEmailLastError: null,
+        lastOutboundResendId: resendId,
+      },
     });
     await writeActivity({
       leadPlaceId: placeId,

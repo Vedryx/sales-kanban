@@ -12,6 +12,7 @@ export type ActivityType =
   | 'deal_won'
   | 'money_update'
   | 'pitch_email'
+  | 'inbound_reply'
   | 'lead_created';
 
 export type Activity = {

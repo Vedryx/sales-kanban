@@ -62,6 +62,16 @@ export function LeadDetailPane({
         setNextIntent(d.lead?.nextActionIntent ?? '');
         setEmail(d.lead?.email ?? '');
       });
+    // Mark read on open. Idempotent — the endpoint just sets
+    // lastReadReplyAt = now. We don't block detail-pane render on its
+    // success; if it 401s (session expired), the badge stays and the
+    // next poll will refetch.
+    fetch(`/api/leads/${encodeURIComponent(placeId)}/mark-read`, {
+      method: 'POST',
+    }).then(() => {
+      if (!active) return;
+      onPatched({ lastReadReplyAt: new Date().toISOString() });
+    }).catch(() => { /* swallow */ });
     fetch('/api/pitch-email-config')
       .then((r) => (r.ok ? r.json() : { enabled: false }))
       .then((d) => {
@@ -400,6 +410,81 @@ export function LeadDetailPane({
               }}
             />
           </div>
+
+          {/* Inbound replies — sanitized at the webhook write path
+              (src/lib/email/sanitizeInbound.ts via /api/inbound/reply).
+              We only ever render payload.htmlSanitized via
+              dangerouslySetInnerHTML; raw payload.text / payload.html
+              from Resend never make it to the DOM. */}
+          {activities.some((a) => a.type === 'inbound_reply') && (
+            <div>
+              <Label>Inbound replies</Label>
+              <div className="flex flex-col gap-2">
+                {activities
+                  .filter((a) => a.type === 'inbound_reply')
+                  .map((a) => {
+                    const p = (a.payload ?? {}) as {
+                      from?: string;
+                      subject?: string;
+                      snippetText?: string;
+                      htmlSanitized?: string;
+                      receivedAt?: string;
+                    };
+                    return (
+                      <div
+                        key={a._id}
+                        className="rounded-md border p-3 text-[12.5px]"
+                        style={{
+                          background: 'var(--color-surface)',
+                          borderColor: 'var(--color-border)',
+                        }}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div
+                              className="truncate font-semibold"
+                              style={{ color: 'var(--color-text)' }}
+                            >
+                              {p.subject || '(no subject)'}
+                            </div>
+                            <div
+                              className="mono mt-0.5 truncate text-[10.5px]"
+                              style={{ color: 'var(--color-text3)' }}
+                            >
+                              {p.from ?? 'unknown sender'}
+                            </div>
+                          </div>
+                          <span
+                            className="mono shrink-0 text-[10.5px]"
+                            style={{ color: 'var(--color-text3)' }}
+                            title={new Date(p.receivedAt ?? a.createdAt).toLocaleString()}
+                          >
+                            {formatRelative(p.receivedAt ?? a.createdAt)}
+                          </span>
+                        </div>
+                        {p.htmlSanitized ? (
+                          <div
+                            className="mt-2 max-h-64 overflow-auto text-[12.5px]"
+                            style={{ color: 'var(--color-text2)' }}
+                            // Sanitized server-side via DOMPurify at
+                            // /api/inbound/reply write path. Stored as
+                            // payload.htmlSanitized. Never render raw.
+                            dangerouslySetInnerHTML={{ __html: p.htmlSanitized }}
+                          />
+                        ) : p.snippetText ? (
+                          <div
+                            className="mt-2 whitespace-pre-wrap text-[12.5px]"
+                            style={{ color: 'var(--color-text2)' }}
+                          >
+                            {p.snippetText}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           {/* Activity */}
           <div>
