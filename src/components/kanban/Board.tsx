@@ -17,6 +17,14 @@ import { LeadDetailPane } from '../lead/LeadDetailPane';
 import { BookMeetingModal } from '../meeting/BookMeetingModal';
 import { AddLeadModal } from './AddLeadModal';
 import { Kpis } from './Kpis';
+import { BoardToolbar } from './BoardToolbar';
+import {
+  type BoardFilterState,
+  DEFAULT_FILTER_STATE,
+  applyFilterSort,
+  loadFilterState,
+  saveFilterState,
+} from '@/lib/leads/boardFilters';
 
 type UnreadRow = {
   placeId: string;
@@ -37,6 +45,28 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   const [bookingLeadId, setBookingLeadId] = useState<string | null>(null);
   const [bookingLeadEmail, setBookingLeadEmail] = useState<string | undefined>(undefined);
   const [addingLead, setAddingLead] = useState(false);
+
+  // Filter/sort state. Initialise to defaults for a stable SSR/first paint,
+  // then hydrate from localStorage on mount (client-only) to avoid a
+  // hydration mismatch. Persist on every change.
+  const [filters, setFilters] = useState<BoardFilterState>(DEFAULT_FILTER_STATE);
+  const filtersHydrated = useRef(false);
+  useEffect(() => {
+    setFilters(loadFilterState());
+    filtersHydrated.current = true;
+  }, []);
+  useEffect(() => {
+    // Skip the pre-hydration write so we never clobber stored state with the
+    // default on first render.
+    if (filtersHydrated.current) saveFilterState(filters);
+  }, [filters]);
+
+  const patchFilters = (patch: Partial<BoardFilterState>) =>
+    setFilters((prev) => ({ ...prev, ...patch }));
+  // Clear resets the filters but preserves the chosen sort (sort never hides
+  // cards, so it isn't part of "active filters").
+  const clearFilters = () =>
+    setFilters((prev) => ({ ...DEFAULT_FILTER_STATE, sort: prev.sort }));
 
   // The set of placeIds we've already toasted this session — so the user
   // doesn't get the same toast every 30s for the same unread reply.
@@ -135,6 +165,11 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
+  // Filter + sort the full set once, then bucket into columns. Sort order is
+  // preserved within each column because applyFilterSort sorts before we
+  // split. KPIs intentionally read the unfiltered `leads` (pipeline totals).
+  const visibleLeads = useMemo(() => applyFilterSort(leads, filters), [leads, filters]);
+
   const byColumn = useMemo(() => {
     const map: Record<StageId, LeadCard[]> = {
       new: [],
@@ -145,9 +180,9 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
       verbal_yes: [],
       closed: [],
     };
-    for (const lead of leads) map[columnFor(lead.stage)].push(lead);
+    for (const lead of visibleLeads) map[columnFor(lead.stage)].push(lead);
     return map;
-  }, [leads]);
+  }, [visibleLeads]);
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -182,7 +217,9 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
           <div>
             <h1 className="m-0 text-[23px] font-extrabold tracking-tight">Pipeline</h1>
             <p className="mt-1 text-[13px]" style={{ color: 'var(--color-text3)' }}>
-              {leads.length} leads
+              {visibleLeads.length === leads.length
+                ? `${leads.length} leads`
+                : `${visibleLeads.length} of ${leads.length} leads`}
               <span className="max-sm:hidden"> · drag cards between columns to update stage</span>
             </p>
           </div>
@@ -196,6 +233,7 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
             </button>
           </div>
         </div>
+        <BoardToolbar state={filters} onChange={patchFilters} onClear={clearFilters} />
         <Kpis leads={leads} />
       </header>
 
