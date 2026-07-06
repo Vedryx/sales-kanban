@@ -125,10 +125,15 @@ export function BoardToolbar({
   state,
   onChange,
   onClear,
+  verticalOptions = [],
 }: {
   state: BoardFilterState;
   onChange: (patch: Partial<BoardFilterState>) => void;
   onClear: () => void;
+  // Distinct vertical values derived from the loaded board (client-side).
+  // Empty list = no vertical chip rendered — keeps the toolbar clean for
+  // legacy boards with no `vertical` on any card.
+  verticalOptions?: string[];
 }) {
   function toggleFlag(flag: ScoreFlag) {
     const has = state.scoreFlags.includes(flag);
@@ -222,6 +227,42 @@ export function BoardToolbar({
         </span>
         Unread only
       </button>
+
+      {/* Vertical (single) — only render when the board has at least one
+          card carrying a vertical value. Keeps the toolbar tidy on legacy
+          boards where no lead has been tagged yet. */}
+      {verticalOptions.length > 0 && (
+        <Dropdown
+          active={state.vertical !== ''}
+          label={<>Vertical: {state.vertical === '' ? 'All' : state.vertical}</>}
+        >
+          {(close) => (
+            <>
+              <MenuRow
+                selected={state.vertical === ''}
+                onClick={() => {
+                  onChange({ vertical: '' });
+                  close();
+                }}
+              >
+                All
+              </MenuRow>
+              {verticalOptions.map((v) => (
+                <MenuRow
+                  key={v}
+                  selected={state.vertical === v}
+                  onClick={() => {
+                    onChange({ vertical: v });
+                    close();
+                  }}
+                >
+                  {v}
+                </MenuRow>
+              ))}
+            </>
+          )}
+        </Dropdown>
+      )}
 
       {/* Sort (single) */}
       <Dropdown active={state.sort !== 'name_asc'} label={<>Sort: {SORT_LABELS[state.sort]}</>}>

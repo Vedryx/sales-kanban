@@ -8,6 +8,10 @@ export type LeadCard = {
   businessName: string;
   city?: string;
   state?: string;
+  // Business vertical (e.g. 'dentist'). Written by the outbound-agent local
+  // bridge on lead create; also filterable on the board. Optional so legacy
+  // rows without the field don't need a backfill migration.
+  vertical?: string;
   pagespeed?: number;
   pagespeedFlag?: 'red' | 'amber' | 'green';
   website?: string;

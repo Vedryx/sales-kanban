@@ -486,6 +486,56 @@ export function LeadDetailPane({
             </div>
           )}
 
+          {/* Voice call transcripts — dispositions written by the outbound
+              agent local bridge carry a full transcript in payload.transcript.
+              Rendered as a dedicated block above the raw activity feed so the
+              SDR doesn't have to squint at JSON to read a call. Transcript is
+              a plain string (no HTML) so we render with whitespace-pre-wrap;
+              no dangerouslySetInnerHTML. Duplicates keyed by callId are
+              collapsed — bridge writes call_started + call_outcome per call
+              and we only render the transcript-bearing outcome once. */}
+          {activities.some((a) => a.type === 'disposition' && !!(a.payload as { transcript?: string })?.transcript) && (
+            <div>
+              <Label>Voice call transcripts</Label>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const seen = new Set<string>();
+                  return activities
+                    .filter((a) => {
+                      if (a.type !== 'disposition') return false;
+                      const p = (a.payload ?? {}) as { transcript?: string; callId?: string };
+                      if (!p.transcript) return false;
+                      const key = p.callId ?? a._id ?? String(a.createdAt);
+                      if (seen.has(key)) return false;
+                      seen.add(key);
+                      return true;
+                    })
+                    .map((a) => {
+                      const p = (a.payload ?? {}) as {
+                        callId?: string;
+                        disposition?: string;
+                        productInterest?: string | null;
+                        interestScore?: number | null;
+                        summary?: string | null;
+                        transcript?: string;
+                      };
+                      return (
+                        <TranscriptCard
+                          key={a._id ?? p.callId ?? String(a.createdAt)}
+                          disposition={p.disposition ?? '—'}
+                          summary={p.summary ?? null}
+                          interestScore={p.interestScore ?? null}
+                          productInterest={p.productInterest ?? null}
+                          transcript={p.transcript ?? ''}
+                          createdAt={a.createdAt}
+                        />
+                      );
+                    });
+                })()}
+              </div>
+            </div>
+          )}
+
           {/* Activity */}
           <div>
             <Label>Activity</Label>
@@ -560,6 +610,93 @@ function Label({ children }: { children: React.ReactNode }) {
       style={{ color: 'var(--color-text3)' }}
     >
       {children}
+    </div>
+  );
+}
+
+function TranscriptCard({
+  disposition,
+  summary,
+  interestScore,
+  productInterest,
+  transcript,
+  createdAt,
+}: {
+  disposition: string;
+  summary: string | null;
+  interestScore: number | null;
+  productInterest: string | null;
+  transcript: string;
+  createdAt: string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="rounded-md border p-3 text-[12.5px]"
+      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span
+              className="rounded-full px-2 py-0.5 text-[10.5px] font-extrabold uppercase tracking-wide"
+              style={{ background: 'var(--color-surface2, #1c1f24)', color: 'var(--color-text)' }}
+            >
+              {disposition}
+            </span>
+            {productInterest && (
+              <span className="text-[10.5px]" style={{ color: 'var(--color-text3)' }}>
+                {productInterest}
+              </span>
+            )}
+            {typeof interestScore === 'number' && (
+              <span
+                className="mono text-[10.5px] font-bold"
+                style={{ color: 'var(--color-amber)' }}
+                title="Interest score"
+              >
+                {interestScore}
+              </span>
+            )}
+          </div>
+        </div>
+        <span
+          className="mono shrink-0 text-[10.5px]"
+          style={{ color: 'var(--color-text3)' }}
+          title={new Date(createdAt).toLocaleString()}
+        >
+          {formatRelative(createdAt)}
+        </span>
+      </div>
+      {summary && (
+        <div className="mt-2 text-[12.5px]" style={{ color: 'var(--color-text2)' }}>
+          {summary}
+        </div>
+      )}
+      {transcript && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="mt-2 text-[11px] underline"
+            style={{ color: 'var(--color-text3)' }}
+          >
+            {open ? 'Hide transcript' : 'Show transcript'}
+          </button>
+          {open && (
+            <div
+              className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border p-2 text-[12px]"
+              style={{
+                background: 'var(--color-bg2)',
+                borderColor: 'var(--color-border)',
+                color: 'var(--color-text2)',
+              }}
+            >
+              {transcript}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
