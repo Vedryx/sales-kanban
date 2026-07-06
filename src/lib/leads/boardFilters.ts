@@ -18,6 +18,9 @@ export type BoardFilterState = {
   scoreFlags: ScoreFlag[];
   pitch: PitchStatus;
   unreadOnly: boolean;
+  // '' = all verticals (default). Otherwise a strict string-equal match on
+  // LeadCard.vertical — cards with no vertical are excluded while active.
+  vertical: string;
   sort: SortKey;
 };
 
@@ -26,6 +29,7 @@ export const DEFAULT_FILTER_STATE: BoardFilterState = {
   scoreFlags: [],
   pitch: 'all',
   unreadOnly: false,
+  vertical: '',
   sort: 'name_asc',
 };
 
@@ -43,7 +47,8 @@ export function hasActiveFilter(s: BoardFilterState): boolean {
     s.search.trim() !== '' ||
     s.scoreFlags.length > 0 ||
     s.pitch !== 'all' ||
-    s.unreadOnly
+    s.unreadOnly ||
+    s.vertical !== ''
   );
 }
 
@@ -68,6 +73,9 @@ function matchesFilter(l: LeadCard, s: BoardFilterState): boolean {
   if (s.pitch === 'not_sent' && l.hasPitchEmailSent) return false;
 
   if (s.unreadOnly && !isUnreadReply(l)) return false;
+
+  // Vertical: exact match; cards with no vertical are excluded while active.
+  if (s.vertical !== '' && l.vertical !== s.vertical) return false;
 
   return true;
 }
@@ -125,6 +133,8 @@ export function loadFilterState(): BoardFilterState {
       scoreFlags: Array.isArray(parsed.scoreFlags)
         ? parsed.scoreFlags.filter((f): f is ScoreFlag => f === 'red' || f === 'amber' || f === 'green')
         : [],
+      // Defensive: vertical must be a string; anything else → '' (all).
+      vertical: typeof parsed.vertical === 'string' ? parsed.vertical : '',
     };
   } catch {
     return DEFAULT_FILTER_STATE;

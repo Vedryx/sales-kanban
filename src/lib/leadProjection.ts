@@ -16,6 +16,7 @@ export type RawLeadDoc = {
   business?: string;
   city?: string;
   state?: unknown;
+  vertical?: string;
   pagespeed?: number;
   pagespeedScore?: number;
   pagespeedFlag?: 'red' | 'amber' | 'green';
@@ -66,6 +67,7 @@ export function toCard(raw: RawLeadDoc): LeadCard {
     businessName: raw.name ?? raw.business ?? 'Unknown business',
     city: optionalText(raw.city),
     state: optionalText(raw.state),
+    vertical: optionalText(raw.vertical),
     pagespeed: raw.pagespeed ?? raw.pagespeedScore,
     pagespeedFlag: raw.pagespeedFlag,
     website: raw.website,

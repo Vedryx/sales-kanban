@@ -170,6 +170,14 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
   // split. KPIs intentionally read the unfiltered `leads` (pipeline totals).
   const visibleLeads = useMemo(() => applyFilterSort(leads, filters), [leads, filters]);
 
+  // Distinct, sorted vertical values across the loaded board. Recomputed
+  // when leads mutate; drives the vertical dropdown in BoardToolbar.
+  const verticalOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of leads) if (l.vertical) set.add(l.vertical);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [leads]);
+
   const byColumn = useMemo(() => {
     const map: Record<StageId, LeadCard[]> = {
       new: [],
@@ -233,7 +241,12 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
             </button>
           </div>
         </div>
-        <BoardToolbar state={filters} onChange={patchFilters} onClear={clearFilters} />
+        <BoardToolbar
+          state={filters}
+          onChange={patchFilters}
+          onClear={clearFilters}
+          verticalOptions={verticalOptions}
+        />
         <Kpis leads={leads} />
       </header>
 

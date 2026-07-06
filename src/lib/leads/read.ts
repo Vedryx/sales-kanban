@@ -27,6 +27,7 @@ export async function getBoardLeads(): Promise<LeadCard[]> {
         business: 1,
         city: 1,
         state: 1,
+        vertical: 1,
         pagespeed: 1,
         pagespeedScore: 1,
         pagespeedFlag: 1,
