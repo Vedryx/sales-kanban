@@ -11,10 +11,17 @@ import { writeActivity } from '@/lib/activities/write';
 // collection the scraper feeds) so the existing board read/join works unchanged.
 // placeId is prefixed `manual:` + a UUID so it can never collide with a Google
 // place_id and the scraper cron will never overwrite it.
+//
+// Only `businessName` is required. `website` / `email` are optional so an SDR
+// can capture a lead from a business card, a phone conversation, or a
+// referral before the full contact info is available. Downstream flows guard
+// on those fields being present (pagespeed/observatory in the API `after()`
+// block; pitch email button in LeadDetailPane is disabled until an email is
+// added by the SDR).
 export async function createManualLead(opts: {
   businessName: string;
-  website: string;
-  email: string;
+  website?: string;
+  email?: string;
   city?: string;
   state?: string;
   phone?: string;
