@@ -5,17 +5,32 @@ import { createManualLead, patchLeadPagespeed, patchLeadSecurity } from '@/lib/l
 import { runPagespeed } from '@/lib/pagespeed/run';
 import { runObservatory } from '@/lib/observatory/run';
 
-// Mandatory: businessName, website, email. Everything else optional.
+// Mandatory: businessName. Everything else optional.
 // Optional text fields accept '' from the form and are coerced to undefined.
+// `website` and `email` also drop empty strings, but when present they are
+// still validated as url() / email() respectively — half-typed values that
+// won't pagespeed / can't send should hard-fail loudly at the API boundary.
 const optionalText = z
   .string()
   .optional()
   .transform((v) => (v && v.trim() !== '' ? v.trim() : undefined));
 
+const optionalUrl = z
+  .string()
+  .optional()
+  .transform((v) => (v && v.trim() !== '' ? v.trim() : undefined))
+  .pipe(z.string().url().optional());
+
+const optionalEmail = z
+  .string()
+  .optional()
+  .transform((v) => (v && v.trim() !== '' ? v.trim() : undefined))
+  .pipe(z.string().email().optional());
+
 const Body = z.object({
   businessName: z.string().trim().min(1),
-  website: z.string().trim().url(),
-  email: z.string().trim().email(),
+  website: optionalUrl,
+  email: optionalEmail,
   city: optionalText,
   state: optionalText,
   phone: optionalText,

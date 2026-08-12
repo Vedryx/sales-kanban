@@ -38,8 +38,11 @@ export function AddLeadModal({
   }, [onClose]);
 
   const nameOk = businessName.trim().length > 0;
-  const websiteOk = URL_RE.test(website.trim());
-  const emailOk = EMAIL_RE.test(email.trim());
+  // Website + email are optional. When present, validate the shape so we
+  // don't send garbage to the server (server will still reject with 400 as
+  // the final gate, but a client hint reads faster than a round-trip).
+  const websiteOk = website.trim() === '' || URL_RE.test(website.trim());
+  const emailOk = email.trim() === '' || EMAIL_RE.test(email.trim());
   const canSubmit = nameOk && websiteOk && emailOk && !busy;
 
   async function submit() {
@@ -47,13 +50,15 @@ export function AddLeadModal({
     setBusy(true);
     setErr(null);
     try {
+      const websiteTrimmed = website.trim();
+      const emailTrimmed = email.trim();
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           businessName: businessName.trim(),
-          website: normalizeUrl(website),
-          email: email.trim(),
+          website: websiteTrimmed ? normalizeUrl(websiteTrimmed) : undefined,
+          email: emailTrimmed || undefined,
           city: city.trim() || undefined,
           state: stateField.trim() || undefined,
           phone: phone.trim() || undefined,
@@ -99,7 +104,8 @@ export function AddLeadModal({
           <div>
             <h3 className="m-0 text-[17px] font-extrabold tracking-tight">Add lead</h3>
             <p className="mt-1 text-[12.5px]" style={{ color: 'var(--color-text3)' }}>
-              Name, website and email are required. The rest is optional.
+              Only business name is required. Add website + email to enable
+              PageSpeed scoring and pitch email.
             </p>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ color: 'var(--color-text2)' }}>
@@ -112,11 +118,11 @@ export function AddLeadModal({
             <TextInput value={businessName} onChange={setBusinessName} placeholder="Acme Inc" />
           </Field>
 
-          <Field label="Website" required invalid={website.length > 0 && !websiteOk}>
+          <Field label="Website" invalid={website.length > 0 && !websiteOk}>
             <TextInput value={website} onChange={setWebsite} placeholder="acme.com" />
           </Field>
 
-          <Field label="Email" required invalid={email.length > 0 && !emailOk}>
+          <Field label="Email" invalid={email.length > 0 && !emailOk}>
             <TextInput value={email} onChange={setEmail} placeholder="owner@acme.com" />
           </Field>
 

@@ -74,7 +74,7 @@ npm run build       # prod build
 
 ## Iter 1 known gaps
 
-- Add-lead button disabled (manual lead entry is iter 2)
+- Manual lead entry live — only `businessName` is required; website + email are optional so an SDR can capture a lead from a business card / call before contact info is confirmed. Adding website unlocks PageSpeed + Observatory scoring; adding email unlocks pitch email.
 - Reschedule / cancel meeting UI not surfaced yet (data layer ready)
 - Sentry integration deferred to iter 2
 - Lost/DNC banner shows count only; no inline meeting cancel button yet
