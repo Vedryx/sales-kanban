@@ -13,7 +13,8 @@ export type ActivityType =
   | 'money_update'
   | 'pitch_email'
   | 'inbound_reply'
-  | 'lead_created';
+  | 'lead_created'
+  | 'meeting_summary';
 
 export type Activity = {
   _id?: string;

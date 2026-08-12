@@ -1,9 +1,10 @@
 import 'server-only';
 import { randomUUID } from 'crypto';
+import type { Document, UpdateFilter } from 'mongodb';
 import { getDb } from '@/lib/mongo';
 import { COLLECTIONS } from '@/lib/collections';
 import { toCard, type RawLeadDoc } from '@/lib/leadProjection';
-import type { LeadCard } from '@/types/lead';
+import type { LeadCard, MeetingSummary } from '@/types/lead';
 import type { GranularStage } from '@/lib/stages';
 import { writeActivity } from '@/lib/activities/write';
 
@@ -248,6 +249,59 @@ export async function patchLeadMoney(opts: {
     type: 'money_update',
     payload: { field: opts.field, amount: opts.amount },
   });
+}
+
+// Append a meeting summary onto `sk_lead_state.meetingSummaries`.
+// The state doc may not exist yet (fresh lead, no stage moves) so we use
+// $push in an upsert-safe update with $setOnInsert for leadPlaceId +
+// createdAt + stage. Mirrors the pattern in `patchLeadMoney`.
+//
+// Also writes a `meeting_summary` activity so the entry surfaces in the
+// standard activity feed (useful for time-based scan without opening the
+// dedicated summaries block).
+export async function appendMeetingSummary(opts: {
+  placeId: string;
+  text: string;
+  sdrEmail: string;
+  sdrName?: string;
+}): Promise<MeetingSummary> {
+  const db = await getDb();
+  const now = new Date();
+  const summary: MeetingSummary = {
+    id: randomUUID(),
+    text: opts.text,
+    at: now.toISOString(),
+    by: opts.sdrEmail,
+  };
+
+  // The Mongo driver's PushOperator<Document> requires the value type to
+  // satisfy the array-element type inferred from the collection schema.
+  // We don't declare typed collections anywhere in the app, so TS can't
+  // resolve it and rejects our shape. Cast to the raw UpdateFilter shape;
+  // the runtime BSON is identical to what the driver would encode from a
+  // typed call.
+  const update = {
+    $push: { meetingSummaries: summary },
+    $set: {
+      leadPlaceId: opts.placeId,
+      updatedAt: now,
+      updatedBy: opts.sdrEmail,
+    },
+    $setOnInsert: { createdAt: now, stage: 'new' as GranularStage },
+  } as unknown as UpdateFilter<Document>;
+  await db
+    .collection(COLLECTIONS.sk_lead_state)
+    .updateOne({ leadPlaceId: opts.placeId }, update, { upsert: true });
+
+  await writeActivity({
+    leadPlaceId: opts.placeId,
+    sdrEmail: opts.sdrEmail,
+    sdrName: opts.sdrName,
+    type: 'meeting_summary',
+    payload: { id: summary.id, textLength: summary.text.length },
+  });
+
+  return summary;
 }
 
 export async function patchLeadState(opts: {

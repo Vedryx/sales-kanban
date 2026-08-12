@@ -45,6 +45,16 @@ export type PagespeedField = {
   cls?: number;
 };
 
+// Free-text meeting summary an SDR types into the lead pane after a
+// call / demo. Append-only — every entry is kept for the audit trail.
+// `by` is the SDR's email (never displayed as a link, just labelled).
+export type MeetingSummary = {
+  id: string;
+  text: string;
+  at: string; // ISO
+  by: string; // sdr email
+};
+
 // Detail pane projection — phone allowed (server → server fetch only).
 export type LeadDetail = LeadCard & {
   phone?: string;
@@ -60,4 +70,7 @@ export type LeadDetail = LeadCard & {
   quote?: { amount: number | null; currency: 'USD'; sentAt: string | null };
   deal?: { amount: number | null; currency: 'USD'; closedAt: string | null };
   deposit?: { amount: number | null; paidAt: string | null };
+  // Newest-first list of SDR-written meeting summaries. Rendered as a
+  // collapsible in the detail pane; not projected onto the LeadCard.
+  meetingSummaries?: MeetingSummary[];
 };

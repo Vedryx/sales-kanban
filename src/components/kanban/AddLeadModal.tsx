@@ -28,6 +28,7 @@ export function AddLeadModal({
   const [stateField, setStateField] = useState('');
   const [phone, setPhone] = useState('');
   const [ownerName, setOwnerName] = useState('');
+  const [firstSummary, setFirstSummary] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -70,6 +71,23 @@ export function AddLeadModal({
         setErr('Could not add lead. Check the fields and try again.');
         setBusy(false);
         return;
+      }
+      // Optional first-meeting-summary: fire-and-forget chained POST to the
+      // dedicated summary endpoint. We keep `createManualLead` lean by
+      // pushing this into a second request rather than a wider signature.
+      // Best-effort: if this second call fails, the lead still exists.
+      const summaryText = firstSummary.trim();
+      const placeId = data.lead?.placeId as string | undefined;
+      if (summaryText && placeId) {
+        try {
+          await fetch(`/api/leads/${encodeURIComponent(placeId)}/summary`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ text: summaryText }),
+          });
+        } catch {
+          // Non-fatal — the SDR can add the summary from the detail pane.
+        }
       }
       onCreated(data.lead as LeadCard);
       onClose();
@@ -143,6 +161,18 @@ export function AddLeadModal({
               <TextInput value={ownerName} onChange={setOwnerName} placeholder="Jane Doe" />
             </Field>
           </div>
+
+          <Field label="First meeting summary (optional)">
+            <textarea
+              value={firstSummary}
+              onChange={(e) => setFirstSummary(e.target.value)}
+              placeholder="Where did you hear about this lead? What did they say?"
+              rows={3}
+              maxLength={2000}
+              className="w-full rounded-md border bg-transparent px-3 py-2 text-[13px] outline-none"
+              style={{ borderColor: 'var(--color-border2)', color: 'var(--color-text)' }}
+            />
+          </Field>
 
           {err && (
             <p className="text-[12.5px]" style={{ color: 'var(--color-red)' }}>

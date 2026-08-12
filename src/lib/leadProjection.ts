@@ -3,6 +3,7 @@
 import type {
   LeadCard,
   LeadDetail,
+  MeetingSummary,
   PagespeedMetrics,
   PagespeedCategories,
   PagespeedField,
@@ -43,6 +44,10 @@ export type RawLeadDoc = {
     quote?: LeadDetail['quote'];
     deal?: LeadDetail['deal'];
     deposit?: LeadDetail['deposit'];
+    // Persisted newest-first (via $push at the end + client sort on read).
+    // On the wire the array is small (1-N per lead) so we sort in the
+    // projection layer rather than an aggregation stage.
+    meetingSummaries?: MeetingSummary[];
   };
 };
 
@@ -86,6 +91,12 @@ export function toCard(raw: RawLeadDoc): LeadCard {
 export function toDetail(raw: RawLeadDoc): LeadDetail {
   const card = toCard(raw);
   const s = raw.state_data ?? {};
+  // Newest-first ordering. Persistence is append via $push, so DB order
+  // is insertion order (oldest first). Sort here so the client can render
+  // straight-through without re-sorting.
+  const summaries = Array.isArray(s.meetingSummaries)
+    ? [...s.meetingSummaries].sort((a, b) => (a.at < b.at ? 1 : -1))
+    : undefined;
   return {
     ...card,
     phone: raw.phone,
@@ -101,5 +112,6 @@ export function toDetail(raw: RawLeadDoc): LeadDetail {
     quote: s.quote,
     deal: s.deal,
     deposit: s.deposit,
+    meetingSummaries: summaries,
   };
 }
