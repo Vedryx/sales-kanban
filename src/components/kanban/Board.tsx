@@ -285,6 +285,18 @@ export function Board({ initialLeads }: { initialLeads: LeadCard[] }) {
               arr.map((l) => (l.placeId === openLeadId ? { ...l, ...patch } : l)),
             )
           }
+          onDeleted={(deletedId) => {
+            // Optimistic drop — the DELETE already succeeded server-side.
+            // Also close the pane and clear any related state so a stale
+            // ref to the deleted lead can't linger (e.g. booking modal).
+            setLeads((arr) => arr.filter((l) => l.placeId !== deletedId));
+            setOpenLeadId(null);
+            if (bookingLeadId === deletedId) {
+              setBookingLeadId(null);
+              setBookingLeadEmail(undefined);
+            }
+            toast.success('Lead deleted.');
+          }}
         />
       )}
       {addingLead && (

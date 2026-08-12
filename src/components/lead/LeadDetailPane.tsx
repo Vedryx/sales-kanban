@@ -1,10 +1,11 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { X, Copy, AlertTriangle, Mail } from 'lucide-react';
+import { X, Copy, AlertTriangle, Mail, Trash2 } from 'lucide-react';
 import type { LeadDetail } from '@/types/lead';
 import type { Activity } from '@/types/activity';
 import { LOST_OR_DNC, type GranularStage } from '@/lib/stages';
 import { PitchEmailModal } from './PitchEmailModal';
+import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -32,11 +33,13 @@ export function LeadDetailPane({
   onClose,
   onBook,
   onPatched,
+  onDeleted,
 }: {
   placeId: string;
   onClose: () => void;
   onBook: (leadEmail?: string) => void;
   onPatched: (patch: Partial<LeadDetail>) => void;
+  onDeleted: (placeId: string) => void;
 }) {
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -47,6 +50,32 @@ export function LeadDetailPane({
   const [email, setEmail] = useState<string>('');
   const [pitchModalOpen, setPitchModalOpen] = useState(false);
   const [pitchEmailEnabled, setPitchEmailEnabled] = useState<boolean>(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteErr, setDeleteErr] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (deleting) return;
+    setDeleting(true);
+    setDeleteErr(null);
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(placeId)}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        setDeleteErr(body?.error ?? `Delete failed (${res.status}).`);
+        setDeleting(false);
+        return;
+      }
+      // Notify parent — it drops the card + closes the pane. We don't call
+      // onClose() ourselves because onDeleted also handles pane teardown.
+      onDeleted(placeId);
+    } catch {
+      setDeleteErr('Network error. Try again.');
+      setDeleting(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -170,14 +199,30 @@ export function LeadDetailPane({
               {lead?.stage ?? '—'} · {lead?.city ?? ''} {lead?.state ?? ''}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-md p-1 hover:bg-[var(--color-surface)]"
-            style={{ color: 'var(--color-text2)' }}
-            aria-label="Close"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            {lead && (
+              <button
+                onClick={() => {
+                  setDeleteErr(null);
+                  setConfirmDeleteOpen(true);
+                }}
+                className="rounded-md p-1 hover:bg-[var(--color-surface)]"
+                style={{ color: 'var(--color-red)' }}
+                aria-label="Delete lead"
+                title="Delete lead"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="rounded-md p-1 hover:bg-[var(--color-surface)]"
+              style={{ color: 'var(--color-text2)' }}
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </header>
 
         {showClosedBanner && (
@@ -575,6 +620,18 @@ export function LeadDetailPane({
         </div>
       </aside>
 
+      {confirmDeleteOpen && lead && (
+        <ConfirmDeleteDialog
+          businessName={lead.businessName}
+          busy={deleting}
+          error={deleteErr}
+          onCancel={() => {
+            if (deleting) return;
+            setConfirmDeleteOpen(false);
+          }}
+          onConfirm={handleDelete}
+        />
+      )}
       {pitchModalOpen && lead && lead.email && (
         <PitchEmailModal
           placeId={placeId}
