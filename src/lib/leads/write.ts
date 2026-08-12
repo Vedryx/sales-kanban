@@ -60,6 +60,46 @@ export async function createManualLead(opts: {
   return toCard(doc);
 }
 
+// Hard-delete a lead + everything attached to it. Cascades across the four
+// collections that share the same lead identity:
+//   - valid_pulse_leads (base doc)             keyed by `placeId`
+//   - sk_lead_state (per-lead state)           keyed by `leadPlaceId`
+//   - sk_activities (activity feed)            keyed by `leadPlaceId`
+//   - sk_meetings (booked Google Meets)        keyed by `leadPlaceId`
+//
+// No activity is written on delete — the activity feed is being cascade-deleted
+// alongside the lead, so a lead_deleted marker would be orphaned. The API
+// route returns the per-collection deletedCount so the caller can log / toast.
+//
+// Meeting docs in sk_meetings that already fired a Google Calendar event are
+// NOT canceled on Google's side. That mirrors the existing "closed lead with
+// upcoming meeting" banner UX: cancelling the calendar event is a manual SDR
+// action, not automatic on lead removal.
+export async function deleteLead(placeId: string): Promise<{
+  valid: number;
+  state: number;
+  activities: number;
+  meetings: number;
+}> {
+  const db = await getDb();
+  // Run in parallel — no cross-collection ordering constraint. Any partial
+  // failure surfaces as a thrown error to the API route, which returns 500.
+  const [validRes, stateRes, activitiesRes, meetingsRes] = await Promise.all([
+    db
+      .collection(COLLECTIONS.valid_pulse_leads)
+      .deleteMany({ $or: [{ placeId }, { place_id: placeId }] }),
+    db.collection(COLLECTIONS.sk_lead_state).deleteMany({ leadPlaceId: placeId }),
+    db.collection(COLLECTIONS.sk_activities).deleteMany({ leadPlaceId: placeId }),
+    db.collection(COLLECTIONS.sk_meetings).deleteMany({ leadPlaceId: placeId }),
+  ]);
+  return {
+    valid: validRes.deletedCount ?? 0,
+    state: stateRes.deletedCount ?? 0,
+    activities: activitiesRes.deletedCount ?? 0,
+    meetings: meetingsRes.deletedCount ?? 0,
+  };
+}
+
 export async function moveLeadStage(opts: {
   placeId: string;
   to: GranularStage;
