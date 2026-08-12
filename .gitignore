@@ -15,6 +15,11 @@ next-env.d.ts
 .env.local
 .env.*.local
 
+# secrets / service-account keys — never commit
+sales-kanban-google-secrets.json
+*-google-secrets.json
+*.serviceaccount.json
+
 # ide / os
 .DS_Store
 .idea
