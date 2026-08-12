@@ -116,6 +116,9 @@ export function PreviewSurface({ view }: { view: string }) {
           onPatched={() => {
             /* no-op */
           }}
+          onDeleted={() => {
+            /* no-op */
+          }}
         />
       </div>
     );
