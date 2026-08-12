@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { X, Copy, AlertTriangle, Mail, Trash2 } from 'lucide-react';
-import type { LeadDetail } from '@/types/lead';
+import { X, Copy, AlertTriangle, Mail, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
+import type { LeadDetail, MeetingSummary } from '@/types/lead';
 import type { Activity } from '@/types/activity';
 import { LOST_OR_DNC, type GranularStage } from '@/lib/stages';
 import { PitchEmailModal } from './PitchEmailModal';
@@ -581,6 +581,24 @@ export function LeadDetailPane({
             </div>
           )}
 
+          {/* Meeting summaries — append-only log per lead */}
+          {lead && (
+            <MeetingSummariesBlock
+              placeId={placeId}
+              summaries={lead.meetingSummaries ?? []}
+              onAdded={(s) =>
+                setLead((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        meetingSummaries: [s, ...(prev.meetingSummaries ?? [])],
+                      }
+                    : prev,
+                )
+              }
+            />
+          )}
+
           {/* Activity */}
           <div>
             <Label>Activity</Label>
@@ -655,6 +673,139 @@ export function LeadDetailPane({
             onPatched({ hasPitchEmailSent: true } as Partial<LeadDetail>);
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// Collapsible append-only meeting-summary log. Collapsed by default when
+// the lead already has 1+ summaries (the header is enough at a glance).
+// Expanded when the lead is empty so the "add" textarea is immediately
+// visible — the SDR shouldn't have to click twice to write the first note.
+function MeetingSummariesBlock({
+  placeId,
+  summaries,
+  onAdded,
+}: {
+  placeId: string;
+  summaries: MeetingSummary[];
+  onAdded: (s: MeetingSummary) => void;
+}) {
+  const hasSummaries = summaries.length > 0;
+  const [open, setOpen] = useState<boolean>(!hasSummaries);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    const trimmed = draft.trim();
+    if (!trimmed || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/leads/${encodeURIComponent(placeId)}/summary`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.ok) {
+        setErr(data?.error ?? 'Could not save summary.');
+        setBusy(false);
+        return;
+      }
+      onAdded(data.summary as MeetingSummary);
+      setDraft('');
+      setBusy(false);
+    } catch {
+      setErr('Network error. Try again.');
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="mb-2 flex w-full items-center justify-between rounded-md text-[10.5px] font-bold tracking-wider uppercase"
+        style={{ color: 'var(--color-text3)' }}
+        aria-expanded={open}
+      >
+        <span className="flex items-center gap-1.5">
+          {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          Meeting summaries {hasSummaries && `(${summaries.length})`}
+        </span>
+      </button>
+      {open && (
+        <div className="flex flex-col gap-3">
+          <div>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder="What happened in the meeting? Add a fresh note — the older ones stay below."
+              rows={3}
+              maxLength={2000}
+              className="w-full rounded-md border p-2 text-[13px]"
+              style={{
+                background: 'var(--color-surface)',
+                borderColor: 'var(--color-border2)',
+                color: 'var(--color-text)',
+              }}
+            />
+            <div className="mt-1 flex items-center justify-between">
+              <span
+                className="mono text-[10.5px]"
+                style={{ color: 'var(--color-text3)' }}
+              >
+                {draft.length}/2000
+              </span>
+              <button
+                type="button"
+                onClick={submit}
+                disabled={busy || draft.trim().length === 0}
+                className="rounded-md px-3 py-1.5 text-[12px] font-bold disabled:opacity-50"
+                style={{ background: 'var(--color-amber)', color: '#1b1715' }}
+              >
+                {busy ? 'Adding…' : 'Add summary'}
+              </button>
+            </div>
+            {err && (
+              <p className="mt-1 text-[11px]" style={{ color: 'var(--color-red)' }}>
+                {err}
+              </p>
+            )}
+          </div>
+          {hasSummaries && (
+            <div className="flex flex-col gap-2">
+              {summaries.map((s) => (
+                <div
+                  key={s.id}
+                  className="rounded-md border p-3 text-[12.5px]"
+                  style={{
+                    background: 'var(--color-surface)',
+                    borderColor: 'var(--color-border)',
+                    color: 'var(--color-text2)',
+                  }}
+                >
+                  <div
+                    className="mono mb-1.5 flex items-center justify-between gap-2 text-[10.5px]"
+                    style={{ color: 'var(--color-text3)' }}
+                  >
+                    <span title={s.by}>{s.by}</span>
+                    <span title={new Date(s.at).toLocaleString()}>
+                      {new Date(s.at).toLocaleString([], {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      })}
+                    </span>
+                  </div>
+                  <div className="whitespace-pre-wrap">{s.text}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
