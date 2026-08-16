@@ -29,8 +29,12 @@ const INDEXES = {
   ],
   [suffix('sk_lead_state')]: [
     { keys: { leadPlaceId: 1 }, options: { unique: true } },
+    // `nextActionAt` indexes retained for legacy compatibility until the
+    // one-off cleanup lands. Post-iteration reads/writes use nextReminderAt.
     { keys: { stage: 1, nextActionAt: 1 } },
     { keys: { assignedTo: 1, nextActionAt: 1 } },
+    { keys: { stage: 1, nextReminderAt: 1 } },
+    { keys: { assignedTo: 1, nextReminderAt: 1 } },
   ],
 };
 

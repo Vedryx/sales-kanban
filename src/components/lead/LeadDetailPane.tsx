@@ -3,11 +3,13 @@ import { useEffect, useState } from 'react';
 import { X, Copy, AlertTriangle, Mail, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import type { LeadDetail, MeetingSummary } from '@/types/lead';
 import type { Activity } from '@/types/activity';
-import { LOST_OR_DNC, type GranularStage } from '@/lib/stages';
+import { LOST_OR_DNC } from '@/lib/stages';
+import { reminderChipLabel, reminderCardState } from '@/lib/leads/reminderState';
 import { PitchEmailModal } from './PitchEmailModal';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const REMINDER_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function formatRelative(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
@@ -18,15 +20,6 @@ function formatRelative(iso: string): string {
   const days = Math.round(hours / 24);
   return `${days}d ago`;
 }
-
-const DISPOSITIONS: { code: string; label: string; intent?: string; advanceTo?: GranularStage }[] = [
-  { code: 'no_answer', label: 'No answer · +2h', intent: 'retry call' },
-  { code: 'busy', label: 'Busy · +30m', intent: 'retry call' },
-  { code: 'voicemail', label: 'Voicemail · +24h', intent: 'follow-up call' },
-  { code: 'wrong_number', label: 'Wrong # · DNC', advanceTo: 'closed_dnc' },
-  { code: 'connected', label: 'Connected', advanceTo: 'connected' },
-  { code: 'demo_booked', label: 'Demo booked', advanceTo: 'demo_booked' },
-];
 
 export function LeadDetailPane({
   placeId,
@@ -44,9 +37,7 @@ export function LeadDetailPane({
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [futureMeetings, setFutureMeetings] = useState<number>(0);
-  const [note, setNote] = useState('');
-  const [nextAt, setNextAt] = useState('');
-  const [nextIntent, setNextIntent] = useState('');
+  const [reminder, setReminder] = useState('');
   const [email, setEmail] = useState<string>('');
   const [pitchModalOpen, setPitchModalOpen] = useState(false);
   const [pitchEmailEnabled, setPitchEmailEnabled] = useState<boolean>(false);
@@ -86,9 +77,7 @@ export function LeadDetailPane({
         setLead(d.lead);
         setActivities(d.activities ?? []);
         setFutureMeetings(d.futureMeetings ?? 0);
-        setNote(d.lead?.lastNote ?? '');
-        setNextAt(d.lead?.nextActionAt ?? '');
-        setNextIntent(d.lead?.nextActionIntent ?? '');
+        setReminder(d.lead?.nextReminderAt ?? '');
         setEmail(d.lead?.email ?? '');
       });
     // Mark read on open. Idempotent — the endpoint just sets
@@ -115,25 +104,22 @@ export function LeadDetailPane({
     };
   }, [placeId]);
 
-  async function postActivity(code: string, intent?: string, advanceTo?: GranularStage) {
+  async function postPhoneViewed() {
     await fetch(`/api/leads/${encodeURIComponent(placeId)}/activity`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ code, intent, advanceTo }),
+      body: JSON.stringify({ code: 'phone_viewed' }),
     });
     fetch(`/api/leads/${encodeURIComponent(placeId)}`)
       .then((r) => r.json())
       .then((d) => {
         setLead(d.lead);
         setActivities(d.activities ?? []);
-        if (advanceTo) onPatched({ stage: advanceTo });
       });
   }
 
   async function patchState(patch: Partial<{
-    lastNote: string;
-    nextActionAt: string;
-    nextActionIntent: string;
+    nextReminderAt: string | null;
     email: string | null;
   }>) {
     await fetch(`/api/leads/${encodeURIComponent(placeId)}/state`, {
@@ -146,6 +132,11 @@ export function LeadDetailPane({
         prev ? { ...prev, email: patch.email ?? undefined } : prev,
       );
     }
+    if ('nextReminderAt' in patch) {
+      setLead((prev) =>
+        prev ? { ...prev, nextReminderAt: patch.nextReminderAt ?? null } : prev,
+      );
+    }
     // The board's optimistic update consumes the card-shape Partial. `email`
     // never goes on the card, so strip it before passing up.
     const { email: _omit, ...cardPatch } = patch as Record<string, unknown>;
@@ -153,25 +144,14 @@ export function LeadDetailPane({
     onPatched(cardPatch as Partial<LeadDetail>);
   }
 
-  async function patchMoney(field: 'quote' | 'deal' | 'deposit', amount: number | null) {
-    const res = await fetch(`/api/leads/${encodeURIComponent(placeId)}/money`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ field, amount }),
-    });
-    if (!res.ok) return;
-    // Optimistic local update.
-    setLead((prev) => {
-      if (!prev) return prev;
-      const nowIso = new Date().toISOString();
-      if (field === 'quote') {
-        return { ...prev, quote: { amount, currency: 'USD', sentAt: amount != null ? nowIso : null } };
-      }
-      if (field === 'deal') {
-        return { ...prev, deal: { amount, currency: 'USD', closedAt: amount != null ? nowIso : null } };
-      }
-      return { ...prev, deposit: { amount, paidAt: amount != null ? nowIso : null } };
-    });
+  function commitReminder(next: string) {
+    const trimmed = next.trim();
+    if (trimmed === '') {
+      patchState({ nextReminderAt: null });
+      return;
+    }
+    if (!REMINDER_DATE_RE.test(trimmed)) return; // native date input already enforces
+    patchState({ nextReminderAt: trimmed });
   }
 
   const showClosedBanner = !!lead && LOST_OR_DNC.includes(lead.stage) && futureMeetings > 0;
@@ -252,7 +232,7 @@ export function LeadDetailPane({
                   if (lead.phone) {
                     navigator.clipboard.writeText(lead.phone);
                   }
-                  postActivity('phone_viewed');
+                  postPhoneViewed();
                 }}
                 className="flex items-center gap-2 rounded-md border px-3 py-2 text-[12px]"
                 style={{
@@ -337,24 +317,57 @@ export function LeadDetailPane({
             )}
           </div>
 
-          {/* Dispositions */}
+          {/* Meeting summaries — primary block (design §4.2). Expanded by
+              default; the composer sits at the top and the newest-first
+              log below. */}
+          {lead && (
+            <MeetingSummariesBlock
+              placeId={placeId}
+              summaries={lead.meetingSummaries ?? []}
+              onAdded={(s) => {
+                setLead((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        meetingSummaries: [s, ...(prev.meetingSummaries ?? [])],
+                      }
+                    : prev,
+                );
+                // Card preview mirrors the newest entry (truncated to the
+                // wire-cap length used by the projection). Kept in sync so
+                // the board updates without a full refetch.
+                const preview =
+                  s.text.length > 140
+                    ? `${s.text.slice(0, 139).trimEnd()}…`
+                    : s.text;
+                onPatched({
+                  latestMeetingSummary: { text: preview, at: s.at, by: s.by },
+                });
+              }}
+            />
+          )}
+
+          {/* Next reminder — single date input, drives card colour state */}
           <div>
-            <Label>Disposition</Label>
-            <div className="grid grid-cols-2 gap-2">
-              {DISPOSITIONS.map((d) => (
-                <button
-                  key={d.code}
-                  onClick={() => postActivity(d.code, d.intent, d.advanceTo)}
-                  className="rounded-md border px-3 py-2 text-left text-[12px] hover:bg-[var(--color-surface2)]"
-                  style={{
-                    background: 'var(--color-surface)',
-                    borderColor: 'var(--color-border2)',
-                    color: 'var(--color-text)',
-                  }}
-                >
-                  {d.label}
-                </button>
-              ))}
+            <Label>Next reminder</Label>
+            <div className="flex items-center gap-2 max-sm:flex-col max-sm:items-stretch">
+              <input
+                type="date"
+                value={reminder}
+                onChange={(e) => setReminder(e.target.value)}
+                onBlur={(e) => commitReminder(e.target.value)}
+                className="flex-1 rounded-md border px-3 py-2 text-[13px]"
+                style={{
+                  background: 'var(--color-surface)',
+                  borderColor: 'var(--color-border2)',
+                  color: 'var(--color-text)',
+                }}
+                aria-label="Next reminder date"
+              />
+              <ReminderPreviewChip value={reminder} />
+            </div>
+            <div className="mt-1.5 text-[11px]" style={{ color: 'var(--color-text3)' }}>
+              Sets card colour: red = due today or overdue, yellow = within 2 days.
             </div>
           </div>
 
@@ -386,74 +399,13 @@ export function LeadDetailPane({
             </div>
           )}
 
-          {/* Facts */}
+          {/* Facts — basic client info stays; position shifted below the
+              summaries + reminder per design §4.1. */}
           <div className="grid grid-cols-2 gap-3 text-[12px]">
             <Fact label="Phone" value={lead?.phone ?? '—'} mono />
             <Fact label="Timezone" value={lead?.timezone ?? '—'} />
             <Fact label="Website" value={lead?.website ?? '—'} />
             <Fact label="Owner" value={lead?.ownerName ?? '—'} />
-          </div>
-
-          {/* Money fields — editable; save on blur */}
-          <div className="grid gap-3 max-sm:grid-cols-1 sm:grid-cols-3">
-            <MoneyField
-              label="Quote"
-              amount={lead?.quote?.amount ?? null}
-              onSave={(amt) => patchMoney('quote', amt)}
-            />
-            <MoneyField
-              label="Deal"
-              amount={lead?.deal?.amount ?? null}
-              onSave={(amt) => patchMoney('deal', amt)}
-            />
-            <MoneyField
-              label="Deposit"
-              amount={lead?.deposit?.amount ?? null}
-              onSave={(amt) => patchMoney('deposit', amt)}
-            />
-          </div>
-
-          {/* Next action */}
-          <div>
-            <Label>Next action</Label>
-            <div className="flex gap-2 max-sm:flex-col">
-              <input
-                type="datetime-local"
-                value={nextAt ? new Date(nextAt).toISOString().slice(0, 16) : ''}
-                onChange={(e) => setNextAt(new Date(e.target.value).toISOString())}
-                onBlur={() => patchState({ nextActionAt: nextAt })}
-                className="flex-1"
-              />
-              <input
-                placeholder="intent"
-                value={nextIntent}
-                onChange={(e) => setNextIntent(e.target.value)}
-                onBlur={() => patchState({ nextActionIntent: nextIntent })}
-                className="flex-1 rounded-md border px-3 py-2 text-[12.5px]"
-                style={{
-                  background: 'var(--color-surface)',
-                  borderColor: 'var(--color-border2)',
-                  color: 'var(--color-text)',
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div>
-            <Label>Notes</Label>
-            <textarea
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              onBlur={() => patchState({ lastNote: note })}
-              rows={3}
-              className="w-full rounded-md border p-2 text-[13px]"
-              style={{
-                background: 'var(--color-surface)',
-                borderColor: 'var(--color-border2)',
-                color: 'var(--color-text)',
-              }}
-            />
           </div>
 
           {/* Inbound replies — sanitized at the webhook write path
@@ -581,24 +533,6 @@ export function LeadDetailPane({
             </div>
           )}
 
-          {/* Meeting summaries — append-only log per lead */}
-          {lead && (
-            <MeetingSummariesBlock
-              placeId={placeId}
-              summaries={lead.meetingSummaries ?? []}
-              onAdded={(s) =>
-                setLead((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        meetingSummaries: [s, ...(prev.meetingSummaries ?? [])],
-                      }
-                    : prev,
-                )
-              }
-            />
-          )}
-
           {/* Activity */}
           <div>
             <Label>Activity</Label>
@@ -678,10 +612,35 @@ export function LeadDetailPane({
   );
 }
 
-// Collapsible append-only meeting-summary log. Collapsed by default when
-// the lead already has 1+ summaries (the header is enough at a glance).
-// Expanded when the lead is empty so the "add" textarea is immediately
-// visible — the SDR shouldn't have to click twice to write the first note.
+// The reminder input's inline preview chip. Mirrors the card chip 1:1 so the
+// SDR sees the exact colour state they've just chosen before blur commits it.
+function ReminderPreviewChip({ value }: { value: string }) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const state = reminderCardState(value);
+  const label = reminderChipLabel(value);
+  const palette =
+    state === 'red'
+      ? { color: 'var(--color-red)', background: 'rgba(227,132,118,0.22)' }
+      : state === 'yellow'
+        ? { color: 'var(--color-amber)', background: 'var(--color-amber-soft)' }
+        : { color: 'var(--color-text3)', background: 'var(--color-surface)' };
+  return (
+    <span
+      className="mono shrink-0 rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+      style={palette}
+      aria-label={`Reminder preview: ${label.replace(/^Rem:\s*/, '')}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+// Meeting-summary block. Design §4.2 upgrades this to the primary block:
+// expanded by default (regardless of whether the lead has prior summaries)
+// and the composer sits at the top so the SDR types straight in.
+//
+// Renders a synthetic `legacy-note` entry differently so the SDR sees at a
+// glance that the row predates the meeting-summary model.
 function MeetingSummariesBlock({
   placeId,
   summaries,
@@ -692,7 +651,7 @@ function MeetingSummariesBlock({
   onAdded: (s: MeetingSummary) => void;
 }) {
   const hasSummaries = summaries.length > 0;
-  const [open, setOpen] = useState<boolean>(!hasSummaries);
+  const [open, setOpen] = useState<boolean>(true);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -743,7 +702,13 @@ function MeetingSummariesBlock({
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="What happened in the meeting? Add a fresh note — the older ones stay below."
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  submit();
+                }
+              }}
+              placeholder="Log this meeting or call — what came up, next steps, who owes what."
               rows={3}
               maxLength={2000}
               className="w-full rounded-md border p-2 text-[13px]"
@@ -758,7 +723,7 @@ function MeetingSummariesBlock({
                 className="mono text-[10.5px]"
                 style={{ color: 'var(--color-text3)' }}
               >
-                {draft.length}/2000
+                {draft.length}/2000 · Cmd/Ctrl+Enter to save
               </span>
               <button
                 type="button"
@@ -778,31 +743,40 @@ function MeetingSummariesBlock({
           </div>
           {hasSummaries && (
             <div className="flex flex-col gap-2">
-              {summaries.map((s) => (
-                <div
-                  key={s.id}
-                  className="rounded-md border p-3 text-[12.5px]"
-                  style={{
-                    background: 'var(--color-surface)',
-                    borderColor: 'var(--color-border)',
-                    color: 'var(--color-text2)',
-                  }}
-                >
+              {summaries.map((s) => {
+                const isLegacy = s.by === 'legacy-note';
+                return (
                   <div
-                    className="mono mb-1.5 flex items-center justify-between gap-2 text-[10.5px]"
-                    style={{ color: 'var(--color-text3)' }}
+                    key={s.id}
+                    className="rounded-md border p-3 text-[12.5px]"
+                    style={{
+                      background: 'var(--color-surface)',
+                      borderColor: 'var(--color-border)',
+                      color: 'var(--color-text2)',
+                    }}
                   >
-                    <span title={s.by}>{s.by}</span>
-                    <span title={new Date(s.at).toLocaleString()}>
-                      {new Date(s.at).toLocaleString([], {
-                        dateStyle: 'short',
-                        timeStyle: 'short',
-                      })}
-                    </span>
+                    <div
+                      className="mono mb-1.5 flex items-center justify-between gap-2 text-[10.5px]"
+                      style={{ color: 'var(--color-text3)' }}
+                    >
+                      {isLegacy ? (
+                        <span className="italic" title="Imported from the retired Notes field">
+                          Legacy note (imported)
+                        </span>
+                      ) : (
+                        <span title={s.by}>{s.by}</span>
+                      )}
+                      <span title={new Date(s.at).toLocaleString()}>
+                        {new Date(s.at).toLocaleString([], {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                      </span>
+                    </div>
+                    <div className="whitespace-pre-wrap">{s.text}</div>
                   </div>
-                  <div className="whitespace-pre-wrap">{s.text}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -922,68 +896,6 @@ function Fact({ label, value, mono }: { label: string; value: string; mono?: boo
         {label}
       </div>
       <div className={mono ? 'mono mt-1 text-[12.5px]' : 'mt-1 text-[12.5px]'}>{value}</div>
-    </div>
-  );
-}
-
-function MoneyField({
-  label,
-  amount,
-  onSave,
-}: {
-  label: string;
-  amount: number | null;
-  onSave: (amount: number | null) => void;
-}) {
-  const [draft, setDraft] = useState<string>(amount != null ? String(amount) : '');
-
-  // Re-sync when the upstream amount changes (e.g. after a fetch).
-  useEffect(() => {
-    setDraft(amount != null ? String(amount) : '');
-  }, [amount]);
-
-  function commit() {
-    const trimmed = draft.trim();
-    if (trimmed === '') {
-      if (amount !== null) onSave(null);
-      return;
-    }
-    const parsed = Number(trimmed.replace(/,/g, ''));
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      // Reject — restore.
-      setDraft(amount != null ? String(amount) : '');
-      return;
-    }
-    if (parsed !== amount) onSave(parsed);
-  }
-
-  return (
-    <div
-      className="rounded-md border px-3 py-2"
-      style={{
-        background: 'var(--color-surface)',
-        borderColor: 'var(--color-border)',
-      }}
-    >
-      <div className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--color-text3)' }}>
-        {label}
-      </div>
-      <div className="mono mt-1 flex items-baseline gap-1 text-[14px]" style={{ color: 'var(--color-amber)' }}>
-        <span>$</span>
-        <input
-          inputMode="decimal"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-          }}
-          placeholder="—"
-          className="mono w-full bg-transparent text-[14px] outline-none"
-          style={{ color: 'var(--color-amber)' }}
-          aria-label={`${label} amount in USD`}
-        />
-      </div>
     </div>
   );
 }

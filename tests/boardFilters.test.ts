@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import {
   applyFilterSort,
   hasActiveFilter,
   DEFAULT_FILTER_STATE,
+  loadFilterState,
   type BoardFilterState,
 } from '../src/lib/leads/boardFilters';
 import type { LeadCard } from '../src/types/lead';
@@ -18,9 +19,9 @@ function lead(p: Partial<LeadCard> & { placeId: string; businessName: string }):
 
 const LEADS: LeadCard[] = [
   lead({ placeId: 'a', businessName: 'Zebra Co', pagespeed: 80, pagespeedFlag: 'green', hasPitchEmailSent: true }),
-  lead({ placeId: 'b', businessName: 'Apple Inc', pagespeed: 25, pagespeedFlag: 'red', hasPitchEmailSent: false, nextActionAt: '2026-06-25', unreadReplyAt: '2026-06-24T06:00:00Z' }),
-  lead({ placeId: 'c', businessName: 'Mango Ltd', pagespeed: 55, pagespeedFlag: 'amber', hasPitchEmailSent: true, nextActionAt: '2026-06-24', unreadReplyAt: '2026-06-23T06:00:00Z', lastReadReplyAt: '2026-06-23T07:00:00Z' }),
-  lead({ placeId: 'd', businessName: 'banana llc', hasPitchEmailSent: false }), // no score
+  lead({ placeId: 'b', businessName: 'Apple Inc', pagespeed: 25, pagespeedFlag: 'red', hasPitchEmailSent: false, nextReminderAt: '2026-06-25', unreadReplyAt: '2026-06-24T06:00:00Z' }),
+  lead({ placeId: 'c', businessName: 'Mango Ltd', pagespeed: 55, pagespeedFlag: 'amber', hasPitchEmailSent: true, nextReminderAt: '2026-06-24', unreadReplyAt: '2026-06-23T06:00:00Z', lastReadReplyAt: '2026-06-23T07:00:00Z' }),
+  lead({ placeId: 'd', businessName: 'banana llc', hasPitchEmailSent: false }), // no score, no reminder
 ];
 
 function state(patch: Partial<BoardFilterState>): BoardFilterState {
@@ -66,8 +67,8 @@ describe('applyFilterSort — sorting', () => {
     expect(out.map((l) => l.placeId)).toEqual(['b', 'c', 'a', 'd']); // 25,55,80,none
   });
 
-  it('next_action: soonest first, none last', () => {
-    const out = applyFilterSort(LEADS, state({ sort: 'next_action' }));
+  it('reminder_soonest: soonest first, none last', () => {
+    const out = applyFilterSort(LEADS, state({ sort: 'reminder_soonest' }));
     expect(out.map((l) => l.placeId).slice(0, 2)).toEqual(['c', 'b']); // 06-24, 06-25
   });
 
@@ -91,5 +92,48 @@ describe('hasActiveFilter', () => {
     expect(hasActiveFilter(state({ unreadOnly: true }))).toBe(true);
     // sort alone is NOT an active filter (never hides cards)
     expect(hasActiveFilter(state({ sort: 'worst_score' }))).toBe(false);
+  });
+});
+
+describe('loadFilterState — legacy sort-key migration', () => {
+  const originalWindow = globalThis.window;
+  afterEach(() => {
+    if (originalWindow === undefined) {
+      // @ts-expect-error — undo test shim
+      delete globalThis.window;
+    } else {
+      globalThis.window = originalWindow;
+    }
+  });
+
+  function withStorage(raw: string) {
+    const store = new Map<string, string>();
+    if (raw) store.set('sk_board_filters_v1', raw);
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, v);
+        },
+      },
+    };
+  }
+
+  it('migrates legacy sort:"next_action" to sort:"reminder_soonest"', () => {
+    withStorage(JSON.stringify({ sort: 'next_action' }));
+    const s = loadFilterState();
+    expect(s.sort).toBe('reminder_soonest');
+  });
+
+  it('accepts a valid sort as-is', () => {
+    withStorage(JSON.stringify({ sort: 'worst_score' }));
+    const s = loadFilterState();
+    expect(s.sort).toBe('worst_score');
+  });
+
+  it('falls back to default sort when the stored key is unknown', () => {
+    withStorage(JSON.stringify({ sort: 'total_garbage' }));
+    const s = loadFilterState();
+    expect(s.sort).toBe(DEFAULT_FILTER_STATE.sort);
   });
 });

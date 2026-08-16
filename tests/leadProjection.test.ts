@@ -5,7 +5,6 @@ const lifecycleState = {
   _id: 'state-doc',
   leadPlaceId: 'castor-dental-care',
   createdAt: '2026-06-17T00:00:00.000Z',
-  nextActionIntent: 'follow-up call',
   stage: 'connected' as const,
   updatedAt: '2026-06-17T01:00:00.000Z',
   updatedBy: 'sdr@example.com',
@@ -27,7 +26,11 @@ describe('leadProjection', () => {
     expect(card.city).toBe('San Antonio');
     expect(card.state).toBeUndefined();
     expect(card.stage).toBe('connected');
-    expect(card.lastNote).toBe('Asked for pricing.');
+    // lastNote is retired from the card projection; the legacy note now
+    // surfaces via `latestMeetingSummary` with the sentinel `by: legacy-note`.
+    expect(card.latestMeetingSummary).not.toBeNull();
+    expect(card.latestMeetingSummary!.by).toBe('legacy-note');
+    expect(card.latestMeetingSummary!.text).toBe('Asked for pricing.');
   });
 
   it('keeps normal geographic state values on detail projections', () => {

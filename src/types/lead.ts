@@ -16,9 +16,14 @@ export type LeadCard = {
   pagespeedFlag?: 'red' | 'amber' | 'green';
   website?: string;
   stage: GranularStage;
-  nextActionAt?: string | null;
-  nextActionIntent?: string | null;
-  lastNote?: string | null;
+  // Calendar day (YYYY-MM-DD) in the SDR's local timezone. Drives the card
+  // colour state (red = today/past, yellow = within +2 days, else default).
+  // Replaces the old `nextActionAt` / `nextActionIntent` datetime pair.
+  nextReminderAt?: string | null;
+  // Latest meeting-summary preview for the collapsed card. `text` is
+  // pre-truncated to 140 chars in the projection layer so wire size stays
+  // bounded regardless of how long the SDR types.
+  latestMeetingSummary?: { text: string; at: string; by: string } | null;
   assignedTo?: string | null;
   hasEmail: boolean;
   hasPitchEmailSent: boolean;
@@ -48,14 +53,19 @@ export type PagespeedField = {
 // Free-text meeting summary an SDR types into the lead pane after a
 // call / demo. Append-only — every entry is kept for the audit trail.
 // `by` is the SDR's email (never displayed as a link, just labelled).
+// Two sentinel `by` values: `'legacy-note'` (synthesized from the retired
+// `sk_lead_state.lastNote` field so pre-migration notes stay visible).
 export type MeetingSummary = {
   id: string;
   text: string;
   at: string; // ISO
-  by: string; // sdr email
+  by: string; // sdr email OR 'legacy-note'
 };
 
 // Detail pane projection — phone allowed (server → server fetch only).
+// Money fields (quote/deal/deposit) intentionally omitted — those columns
+// existed on the pane before this iteration and have been dropped. Legacy
+// data still lives on the sk_lead_state doc but is no longer projected.
 export type LeadDetail = LeadCard & {
   phone?: string;
   email?: string;
@@ -67,10 +77,10 @@ export type LeadDetail = LeadCard & {
   securityGrade?: string;
   pitchEmailSentAt?: string | null;
   pitchEmailLastError?: string | null;
-  quote?: { amount: number | null; currency: 'USD'; sentAt: string | null };
-  deal?: { amount: number | null; currency: 'USD'; closedAt: string | null };
-  deposit?: { amount: number | null; paidAt: string | null };
-  // Newest-first list of SDR-written meeting summaries. Rendered as a
-  // collapsible in the detail pane; not projected onto the LeadCard.
+  // Full newest-first list of SDR-written meeting summaries. Rendered in
+  // the detail pane; the card gets `latestMeetingSummary` (first entry,
+  // preview-length text). May include a synthetic `legacy-note` entry
+  // when `sk_lead_state.lastNote` is still populated (backfill script
+  // has not yet been run).
   meetingSummaries?: MeetingSummary[];
 };
