@@ -8,7 +8,10 @@ import { isUnreadReply } from './unread';
 
 export type ScoreFlag = 'red' | 'amber' | 'green';
 export type PitchStatus = 'all' | 'sent' | 'not_sent';
-export type SortKey = 'name_asc' | 'worst_score' | 'recently_replied' | 'next_action';
+// `reminder_soonest` replaces the retired `next_action` sort. Legacy
+// localStorage values carrying `next_action` are migrated in loadFilterState
+// so a stale browser doesn't crash on a value not in SORT_LABELS.
+export type SortKey = 'name_asc' | 'worst_score' | 'recently_replied' | 'reminder_soonest';
 
 export type BoardFilterState = {
   search: string;
@@ -37,7 +40,7 @@ export const SORT_LABELS: Record<SortKey, string> = {
   name_asc: 'Name A–Z',
   worst_score: 'Worst score first',
   recently_replied: 'Recently replied',
-  next_action: 'Next action soonest',
+  reminder_soonest: 'Reminder soonest',
 };
 
 // True when any filter is narrowing the set (search/score/pitch/unread).
@@ -59,6 +62,16 @@ function latestReplyTs(l: LeadCard): number {
   const ma = Number.isFinite(a) ? a : -Infinity;
   const mb = Number.isFinite(b) ? b : -Infinity;
   return Math.max(ma, mb);
+}
+
+// Reminder date coerced to a millis-since-epoch. YYYY-MM-DD strings sort
+// correctly on their own, but we materialize numbers here so the shared
+// "missing → Infinity → last" pattern matches the other comparators.
+function reminderMs(l: LeadCard): number {
+  const raw = l.nextReminderAt;
+  if (!raw) return Infinity;
+  const parsed = Date.parse(raw.length === 10 ? `${raw}T00:00:00` : raw);
+  return Number.isFinite(parsed) ? parsed : Infinity;
 }
 
 function matchesFilter(l: LeadCard, s: BoardFilterState): boolean {
@@ -92,12 +105,8 @@ function comparator(sort: SortKey): (a: LeadCard, b: LeadCard) => number {
       };
     case 'recently_replied':
       return (a, b) => latestReplyTs(b) - latestReplyTs(a);
-    case 'next_action':
-      return (a, b) => {
-        const av = a.nextActionAt ? Date.parse(a.nextActionAt) : Infinity;
-        const bv = b.nextActionAt ? Date.parse(b.nextActionAt) : Infinity;
-        return av - bv;
-      };
+    case 'reminder_soonest':
+      return (a, b) => reminderMs(a) - reminderMs(b);
     case 'name_asc':
     default:
       return (a, b) => a.businessName.localeCompare(b.businessName);
@@ -124,11 +133,26 @@ export function loadFilterState(): BoardFilterState {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_FILTER_STATE;
-    const parsed = JSON.parse(raw) as Partial<BoardFilterState>;
+    // Widen the sort key to `unknown` at parse time so we can migrate legacy
+    // string values (e.g. the retired `next_action` key) without TS
+    // narrowing them away.
+    const parsed = JSON.parse(raw) as Omit<Partial<BoardFilterState>, 'sort'> & {
+      sort?: unknown;
+    };
     // Merge over defaults so a schema bump (new field) never yields undefined.
+    // Sort key migration: legacy `next_action` collapses onto its successor
+    // `reminder_soonest`; any other unknown value falls back to the default.
+    const migratedSort: SortKey = (() => {
+      const s = parsed.sort;
+      if (typeof s !== 'string') return DEFAULT_FILTER_STATE.sort;
+      if (s === 'next_action') return 'reminder_soonest';
+      if (s in SORT_LABELS) return s as SortKey;
+      return DEFAULT_FILTER_STATE.sort;
+    })();
     return {
       ...DEFAULT_FILTER_STATE,
       ...parsed,
+      sort: migratedSort,
       // Defensive: ensure scoreFlags is an array of valid flags.
       scoreFlags: Array.isArray(parsed.scoreFlags)
         ? parsed.scoreFlags.filter((f): f is ScoreFlag => f === 'red' || f === 'amber' || f === 'green')

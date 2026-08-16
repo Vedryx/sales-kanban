@@ -41,11 +41,23 @@ const MEASURE_SELECTORS = {
     { name: 'board_root', selector: 'h1' }, // "Pipeline" header proxy
     { name: 'first_column', selector: 'main > div > div:nth-child(2) > div' }, // dnd column
     { name: 'add_lead_button', selector: 'button:has-text("Add lead")' },
+    // sales-kanban-lead-reminders: card reminder-state markers. The three
+    // states are set as `data-reminder-state="red|yellow|default"` on the
+    // card root; measuring these confirms the design spec's colour states
+    // are actually rendering.
+    { name: 'card_reminder_red_first', selector: '[data-reminder-state="red"]' },
+    { name: 'card_reminder_yellow_first', selector: '[data-reminder-state="yellow"]' },
+    { name: 'card_reminder_default_first', selector: '[data-reminder-state="default"]' },
   ],
   detail: [
     { name: 'detail_aside', selector: 'aside' },
     { name: 'header_h2', selector: 'aside h2' },
     { name: 'book_button', selector: 'button:has-text("Book G-Meet")' },
+    // sales-kanban-lead-reminders: the primary summaries block + reminder
+    // input replace the retired disposition grid + next-action row.
+    { name: 'summaries_block_header', selector: 'button[aria-expanded]' },
+    { name: 'summary_composer_textarea', selector: 'textarea[maxlength="2000"]' },
+    { name: 'reminder_date_input', selector: 'input[type="date"]' },
   ],
   addlead: [
     { name: 'modal_dialog', selector: 'h3:has-text("Add lead")' },

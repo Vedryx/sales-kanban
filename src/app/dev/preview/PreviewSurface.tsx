@@ -21,6 +21,10 @@ export function PreviewSurface({ view }: { view: string }) {
       const url =
         typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
+      // Reminder is set to "today" so the preview surface exercises the red
+      // card state without depending on wall-clock drift.
+      const today = new Date().toLocaleDateString('en-CA');
+      const nowIso = new Date().toISOString();
       const detail: LeadDetail = {
         placeId: 'fx-detail',
         businessName: 'Sunrise Dental Group',
@@ -31,9 +35,12 @@ export function PreviewSurface({ view }: { view: string }) {
         pagespeedFlag: 'red',
         website: 'https://sunrise-dental.example',
         stage: 'connected',
-        nextActionAt: new Date(Date.now() + 3600_000).toISOString(),
-        nextActionIntent: 'send pitch',
-        lastNote: 'Owner said email a proposal by Friday.',
+        nextReminderAt: today,
+        latestMeetingSummary: {
+          text: 'Owner said email a proposal by Friday. Interested in bundle.',
+          at: nowIso,
+          by: 'sdr@vedryxtech.com',
+        },
         assignedTo: 'sdr@vedryxtech.com',
         hasEmail: true,
         hasPitchEmailSent: false,
@@ -47,9 +54,20 @@ export function PreviewSurface({ view }: { view: string }) {
         securityGrade: 'C',
         pitchEmailSentAt: null,
         pitchEmailLastError: null,
-        quote: { amount: 2500, currency: 'USD', sentAt: new Date().toISOString() },
-        deal: { amount: null, currency: 'USD', closedAt: null },
-        deposit: { amount: null, paidAt: null },
+        meetingSummaries: [
+          {
+            id: 's-1',
+            text: 'Owner said email a proposal by Friday. Interested in bundle.',
+            at: nowIso,
+            by: 'sdr@vedryxtech.com',
+          },
+          {
+            id: 'legacy-note',
+            text: 'Left VM Monday — try again Wed AM.',
+            at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+            by: 'legacy-note',
+          },
+        ],
       };
       const activities: Activity[] = [
         {

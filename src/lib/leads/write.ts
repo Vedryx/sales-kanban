@@ -202,54 +202,11 @@ export async function patchLeadSecurity(opts: {
   );
 }
 
-type MoneyFieldName = 'quote' | 'deal' | 'deposit';
-
-export async function patchLeadMoney(opts: {
-  placeId: string;
-  sdrEmail: string;
-  field: MoneyFieldName;
-  amount: number | null;
-}) {
-  const db = await getDb();
-  const now = new Date();
-  const nowIso = now.toISOString();
-
-  let setBlock: Record<string, unknown>;
-  if (opts.field === 'quote') {
-    setBlock = {
-      quote: { amount: opts.amount, currency: 'USD' as const, sentAt: opts.amount != null ? nowIso : null },
-    };
-  } else if (opts.field === 'deal') {
-    setBlock = {
-      deal: { amount: opts.amount, currency: 'USD' as const, closedAt: opts.amount != null ? nowIso : null },
-    };
-  } else {
-    setBlock = {
-      deposit: { amount: opts.amount, paidAt: opts.amount != null ? nowIso : null },
-    };
-  }
-
-  await db.collection(COLLECTIONS.sk_lead_state).updateOne(
-    { leadPlaceId: opts.placeId },
-    {
-      $set: {
-        ...setBlock,
-        leadPlaceId: opts.placeId,
-        updatedAt: now,
-        updatedBy: opts.sdrEmail,
-      },
-      $setOnInsert: { createdAt: now, stage: 'new' as GranularStage },
-    },
-    { upsert: true },
-  );
-
-  await writeActivity({
-    leadPlaceId: opts.placeId,
-    sdrEmail: opts.sdrEmail,
-    type: 'money_update',
-    payload: { field: opts.field, amount: opts.amount },
-  });
-}
+// NOTE — the old `patchLeadMoney` helper (quote/deal/deposit) was removed
+// alongside the UI money row. Legacy `quote/deal/deposit` fields on
+// existing sk_lead_state docs are left in place; nothing reads them
+// anymore. `money_update` / `quote_sent` / `deal_won` remain in the
+// ActivityType enum so historic feed entries render.
 
 // Append a meeting summary onto `sk_lead_state.meetingSummaries`.
 // The state doc may not exist yet (fresh lead, no stage moves) so we use
@@ -308,9 +265,9 @@ export async function patchLeadState(opts: {
   placeId: string;
   sdrEmail: string;
   patch: Partial<{
-    nextActionAt: string | null;
-    nextActionIntent: string | null;
-    lastNote: string | null;
+    // Calendar day (YYYY-MM-DD) in the SDR's local timezone. Replaces
+    // the retired nextActionAt/nextActionIntent pair.
+    nextReminderAt: string | null;
     email: string | null;
     pitchEmailSentAt: string | null;
     pitchEmailLastError: string | null;
@@ -322,9 +279,6 @@ export async function patchLeadState(opts: {
     // lead. Cleared (or surpassed by lastReadReplyAt) when SDR opens detail.
     unreadReplyAt: string | null;
     lastReadReplyAt: string | null;
-    quote: { amount: number | null; currency: 'USD'; sentAt: string | null };
-    deal: { amount: number | null; currency: 'USD'; closedAt: string | null };
-    deposit: { amount: number | null; paidAt: string | null };
   }>;
 }) {
   const db = await getDb();

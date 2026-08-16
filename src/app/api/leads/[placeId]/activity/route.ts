@@ -2,33 +2,17 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '../../../../../../auth';
 import { writeActivity } from '@/lib/activities/write';
-import { moveLeadStage, patchLeadState } from '@/lib/leads/write';
-import type { GranularStage } from '@/lib/stages';
 
+// After the DISPOSITION block was removed from the lead pane (see goal
+// sales-kanban-lead-reminders), the only remaining caller of this route is
+// the phone-copy button. We narrow the accepted body so an unauthorized
+// caller can't shove arbitrary `disposition` events into the feed via this
+// endpoint. The outbound-agent local bridge writes `disposition` activities
+// through its own server-side `writeActivity` path, not through this HTTP
+// route, so nothing else needs to keep working.
 const Body = z.object({
-  code: z.string(),
-  intent: z.string().optional(),
-  advanceTo: z
-    .enum([
-      'new',
-      'dialing',
-      'connected',
-      'demo_booked',
-      'quote_sent',
-      'verbal_yes',
-      'closed_won',
-      'closed_lost',
-      'closed_dnc',
-    ])
-    .optional(),
+  code: z.literal('phone_viewed'),
 });
-
-// Auto-schedule deltas in minutes
-const SCHEDULE_DELTA: Record<string, number> = {
-  no_answer: 120,
-  busy: 30,
-  voicemail: 1440,
-};
 
 export const dynamic = 'force-dynamic';
 
@@ -39,38 +23,18 @@ export async function POST(
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ ok: false }, { status: 401 });
   const { placeId } = await params;
-  const parsed = Body.safeParse(await req.json());
+  const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ ok: false, error: 'bad_request' }, { status: 400 });
   }
-  const { code, intent, advanceTo } = parsed.data;
 
   await writeActivity({
     leadPlaceId: placeId,
     sdrEmail: session.user.email,
     sdrName: session.user.name ?? undefined,
-    type: code === 'phone_viewed' ? 'phone_viewed' : 'disposition',
-    payload: { code, intent },
+    type: 'phone_viewed',
+    payload: { code: parsed.data.code },
   });
-
-  const delta = SCHEDULE_DELTA[code];
-  if (delta) {
-    const next = new Date(Date.now() + delta * 60_000).toISOString();
-    await patchLeadState({
-      placeId,
-      sdrEmail: session.user.email,
-      patch: { nextActionAt: next, nextActionIntent: intent ?? null },
-    });
-  }
-
-  if (advanceTo) {
-    await moveLeadStage({
-      placeId,
-      to: advanceTo as GranularStage,
-      sdrEmail: session.user.email,
-      sdrName: session.user.name ?? undefined,
-    });
-  }
 
   return NextResponse.json({ ok: true });
 }

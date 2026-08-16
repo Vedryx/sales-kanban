@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Board } from '@/components/kanban/Board';
 import { PreviewSurface } from './PreviewSurface';
 import type { LeadCard } from '@/types/lead';
+import { addDaysLocal, todayLocalDateString } from '@/lib/leads/reminderState';
 
 // Dev-only preview page for mobile-responsive verification.
 // Renders one of three surfaces (?view=board | detail | addlead) with
@@ -16,93 +17,117 @@ import type { LeadCard } from '@/types/lead';
 //   3. The client-side view (PreviewSurface) also gates on window.location.
 export const dynamic = 'force-dynamic';
 
-const FIXTURE_LEADS: LeadCard[] = [
-  {
-    placeId: 'fx-1',
-    businessName: 'Sunrise Dental Group',
-    city: 'Austin',
-    state: 'TX',
-    vertical: 'dentist',
-    pagespeed: 42,
-    pagespeedFlag: 'red',
-    website: 'https://sunrise-dental.example',
-    stage: 'new',
-    nextActionAt: null,
-    nextActionIntent: null,
-    lastNote: null,
-    assignedTo: null,
-    hasEmail: true,
-    hasPitchEmailSent: false,
-  },
-  {
-    placeId: 'fx-2',
-    businessName: 'Bay Area Family Law',
-    city: 'San Jose',
-    state: 'CA',
-    vertical: 'lawyer',
-    pagespeed: 71,
-    pagespeedFlag: 'amber',
-    website: 'https://bayfamlaw.example',
-    stage: 'dialing',
-    nextActionAt: new Date(Date.now() + 3600_000).toISOString(),
-    nextActionIntent: 'follow-up call',
-    lastNote: 'Left voicemail — try Wed AM.',
-    assignedTo: 'sdr@vedryxtech.com',
-    hasEmail: true,
-    hasPitchEmailSent: true,
-  },
-  {
-    placeId: 'fx-3',
-    businessName: 'Peak HVAC & Cooling Solutions Northwest',
-    city: 'Seattle',
-    state: 'WA',
-    vertical: 'hvac',
-    pagespeed: 88,
-    pagespeedFlag: 'green',
-    website: 'https://peak-hvac.example',
-    stage: 'demo_booked',
-    nextActionAt: null,
-    nextActionIntent: null,
-    lastNote: null,
-    assignedTo: 'sdr@vedryxtech.com',
-    hasEmail: true,
-    hasPitchEmailSent: true,
-  },
-  {
-    placeId: 'fx-4',
-    businessName: 'Redwood Realty',
-    city: 'Portland',
-    state: 'OR',
-    vertical: 'realtor',
-    pagespeed: 55,
-    pagespeedFlag: 'amber',
-    website: 'https://redwood.example',
-    stage: 'connected',
-    nextActionAt: null,
-    nextActionIntent: null,
-    lastNote: null,
-    assignedTo: null,
-    hasEmail: false,
-    hasPitchEmailSent: false,
-  },
-  {
-    placeId: 'fx-5',
-    businessName: 'Northlake Auto Repair',
-    city: 'Minneapolis',
-    state: 'MN',
-    vertical: 'auto',
-    pagespeed: 33,
-    pagespeedFlag: 'red',
-    website: 'https://northlake.example',
-    stage: 'quote_sent',
-    nextActionAt: null,
-    nextActionIntent: null,
-    lastNote: null,
-    assignedTo: 'sdr@vedryxtech.com',
-    hasEmail: true,
-    hasPitchEmailSent: true,
-  },
-];
+// Derived at request time so the three reminder states (red/yellow/default)
+// are always relative to "today" in the SDR's timezone. Prevents the fixture
+// board from silently going all-red 3 days after being written.
+function reminderFixtures() {
+  const today = todayLocalDateString();
+  return {
+    overdue: addDaysLocal(today, -2), // red
+    dueToday: today, // red
+    inTwoDays: addDaysLocal(today, 2), // yellow
+    farOut: addDaysLocal(today, 14), // default
+  };
+}
+
+function buildFixtures(): LeadCard[] {
+  const R = reminderFixtures();
+  const nowIso = new Date().toISOString();
+  return [
+    {
+      placeId: 'fx-1',
+      businessName: 'Sunrise Dental Group',
+      city: 'Austin',
+      state: 'TX',
+      vertical: 'dentist',
+      pagespeed: 42,
+      pagespeedFlag: 'red',
+      website: 'https://sunrise-dental.example',
+      stage: 'new',
+      nextReminderAt: null,
+      latestMeetingSummary: null,
+      assignedTo: null,
+      hasEmail: true,
+      hasPitchEmailSent: false,
+    },
+    {
+      placeId: 'fx-2',
+      businessName: 'Bay Area Family Law',
+      city: 'San Jose',
+      state: 'CA',
+      vertical: 'lawyer',
+      pagespeed: 71,
+      pagespeedFlag: 'amber',
+      website: 'https://bayfamlaw.example',
+      stage: 'dialing',
+      nextReminderAt: R.dueToday,
+      latestMeetingSummary: {
+        text: 'Left voicemail — owner said try Wed AM. Interested in bundle.',
+        at: nowIso,
+        by: 'sdr@vedryxtech.com',
+      },
+      assignedTo: 'sdr@vedryxtech.com',
+      hasEmail: true,
+      hasPitchEmailSent: true,
+    },
+    {
+      placeId: 'fx-3',
+      businessName: 'Peak HVAC & Cooling Solutions Northwest',
+      city: 'Seattle',
+      state: 'WA',
+      vertical: 'hvac',
+      pagespeed: 88,
+      pagespeedFlag: 'green',
+      website: 'https://peak-hvac.example',
+      stage: 'demo_booked',
+      nextReminderAt: R.inTwoDays,
+      latestMeetingSummary: {
+        text: 'Demo booked for Friday. Sent the calendar invite; owner confirmed.',
+        at: nowIso,
+        by: 'sdr@vedryxtech.com',
+      },
+      assignedTo: 'sdr@vedryxtech.com',
+      hasEmail: true,
+      hasPitchEmailSent: true,
+    },
+    {
+      placeId: 'fx-4',
+      businessName: 'Redwood Realty',
+      city: 'Portland',
+      state: 'OR',
+      vertical: 'realtor',
+      pagespeed: 55,
+      pagespeedFlag: 'amber',
+      website: 'https://redwood.example',
+      stage: 'connected',
+      nextReminderAt: R.overdue,
+      latestMeetingSummary: null,
+      assignedTo: null,
+      hasEmail: false,
+      hasPitchEmailSent: false,
+    },
+    {
+      placeId: 'fx-5',
+      businessName: 'Northlake Auto Repair',
+      city: 'Minneapolis',
+      state: 'MN',
+      vertical: 'auto',
+      pagespeed: 33,
+      pagespeedFlag: 'red',
+      website: 'https://northlake.example',
+      stage: 'quote_sent',
+      nextReminderAt: R.farOut,
+      latestMeetingSummary: {
+        text: 'Legacy note preserved from the old Notes field pre-migration.',
+        at: nowIso,
+        by: 'legacy-note',
+      },
+      assignedTo: 'sdr@vedryxtech.com',
+      hasEmail: true,
+      hasPitchEmailSent: true,
+    },
+  ];
+}
 
 export default async function DevPreviewPage({
   searchParams,
@@ -111,6 +136,7 @@ export default async function DevPreviewPage({
 }) {
   if (process.env.NODE_ENV === 'production') notFound();
   const { view = 'board' } = await searchParams;
+  const FIXTURE_LEADS = buildFixtures();
 
   if (view === 'board') {
     return (

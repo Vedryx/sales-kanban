@@ -37,7 +37,26 @@ export async function getBoardLeads(): Promise<LeadCard[]> {
         securityGrade: 1,
         website: 1,
         email: 1, // only existence — `hasEmail` derived; we don't render the value on the card
-        state_data: 1,
+        // Narrow state_data projection — we specifically want the reminder
+        // field, the summary array (for `latestMeetingSummary` preview), the
+        // legacy `lastNote` + `updatedAt` (for the read-time legacy-note
+        // synthesis in leadProjection.ts), and the fields the card already
+        // consumed (stage, assignedTo, unread state, pitchEmailSentAt,
+        // email override). Excluding the money row from the projection
+        // trims a few bytes per card even though the fields are ignored
+        // downstream. `nextActionAt` stays because it's the fallback source
+        // for `nextReminderAt` on legacy rows.
+        'state_data.stage': 1,
+        'state_data.assignedTo': 1,
+        'state_data.email': 1,
+        'state_data.pitchEmailSentAt': 1,
+        'state_data.unreadReplyAt': 1,
+        'state_data.lastReadReplyAt': 1,
+        'state_data.nextReminderAt': 1,
+        'state_data.nextActionAt': 1,
+        'state_data.lastNote': 1,
+        'state_data.meetingSummaries': 1,
+        'state_data.updatedAt': 1,
       },
     },
   ];
