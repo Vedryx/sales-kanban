@@ -6,9 +6,21 @@ import {
   type ScoreFlag,
   type PitchStatus,
   type SortKey,
+  type GroupBy,
   SORT_LABELS,
   hasActiveFilter,
 } from '@/lib/leads/boardFilters';
+import { UNASSIGNED_KEY, UNASSIGNED_LABEL } from '@/lib/leads/sectionGrouping';
+
+// Truncate a long section label to fit the toolbar trigger without letting
+// it blow out the row at 375px (design-lead.md §4.1). ~18 chars keeps the
+// pill compact; full value shown via `title=` on the caller.
+const SECTION_TRIGGER_MAXLEN = 18;
+function truncateForTrigger(v: string): string {
+  return v.length <= SECTION_TRIGGER_MAXLEN
+    ? v
+    : `${v.slice(0, SECTION_TRIGGER_MAXLEN - 1).trimEnd()}…`;
+}
 
 const FLAG_META: { flag: ScoreFlag; label: string; varName: string }[] = [
   { flag: 'red', label: 'Red (poor)', varName: '--color-red' },
@@ -126,6 +138,7 @@ export function BoardToolbar({
   onChange,
   onClear,
   verticalOptions = [],
+  sectionOptions = [],
 }: {
   state: BoardFilterState;
   onChange: (patch: Partial<BoardFilterState>) => void;
@@ -134,6 +147,11 @@ export function BoardToolbar({
   // Empty list = no vertical chip rendered — keeps the toolbar clean for
   // legacy boards with no `vertical` on any card.
   verticalOptions?: string[];
+  // Canonical section labels derived from the loaded board (see
+  // deriveSectionOptions). Empty list hides the Section filter dropdown
+  // entirely — mirrors the verticalOptions guard so legacy boards stay
+  // clean. The Group-by dropdown always renders regardless.
+  sectionOptions?: string[];
 }) {
   function toggleFlag(flag: ScoreFlag) {
     const has = state.scoreFlags.includes(flag);
@@ -142,8 +160,23 @@ export function BoardToolbar({
     });
   }
 
+  // Trigger label for the Section dropdown. Long section values are
+  // truncated to keep the toolbar row from blowing out at 375px; full value
+  // is exposed via `title` on the trigger span.
+  const sectionTriggerText =
+    state.section === ''
+      ? 'All'
+      : state.section === UNASSIGNED_KEY
+        ? UNASSIGNED_LABEL
+        : truncateForTrigger(state.section);
+  const sectionTriggerTitle =
+    state.section === '' || state.section === UNASSIGNED_KEY
+      ? undefined
+      : state.section;
+
   return (
-    <div className="mt-3.5 flex flex-wrap items-center gap-2.5">
+    <div className="mt-3.5">
+      <div className="flex flex-wrap items-center gap-2.5">
       {/* Search */}
       <label
         className="flex min-w-[220px] items-center gap-2 rounded-md border px-2.5 py-1.5"
@@ -264,6 +297,102 @@ export function BoardToolbar({
         </Dropdown>
       )}
 
+      {/* Section (single) — only rendered when the board carries at least
+          one section anywhere. Order in menu: All → Unassigned → 1px
+          divider → dynamic canonical sections (alphabetical). See
+          design-lead.md §4.1. */}
+      {sectionOptions.length > 0 && (
+        <Dropdown
+          active={state.section !== ''}
+          label={
+            <span title={sectionTriggerTitle}>
+              Section: {sectionTriggerText}
+            </span>
+          }
+        >
+          {(close) => (
+            <>
+              <MenuRow
+                selected={state.section === ''}
+                onClick={() => {
+                  onChange({ section: '' });
+                  close();
+                }}
+              >
+                All
+              </MenuRow>
+              <MenuRow
+                selected={state.section === UNASSIGNED_KEY}
+                onClick={() => {
+                  onChange({ section: UNASSIGNED_KEY });
+                  close();
+                }}
+              >
+                {/* Unassigned row uses --color-text3 unselected / --color-text
+                    selected — reads as system-generated, not SDR-typed. */}
+                <span
+                  style={{
+                    color:
+                      state.section === UNASSIGNED_KEY
+                        ? 'var(--color-text)'
+                        : 'var(--color-text3)',
+                  }}
+                >
+                  {UNASSIGNED_LABEL}
+                </span>
+              </MenuRow>
+              <div
+                aria-hidden="true"
+                className="my-1"
+                style={{
+                  height: 1,
+                  background: 'var(--color-border)',
+                }}
+              />
+              {sectionOptions.map((v) => (
+                <MenuRow
+                  key={v}
+                  selected={state.section === v}
+                  onClick={() => {
+                    onChange({ section: v });
+                    close();
+                  }}
+                >
+                  <span title={v} className="truncate">
+                    {v}
+                  </span>
+                </MenuRow>
+              ))}
+            </>
+          )}
+        </Dropdown>
+      )}
+
+      {/* Group (single) — mode toggle. Blue active border matches Unread
+          toggle idiom ("mode engaged"), NOT a filter — deliberately
+          excluded from hasActiveFilter + clearFilters (design-lead.md §4.2 +
+          cto.md §2.5). Always rendered so the feature is discoverable even
+          on boards with zero sections. */}
+      <Dropdown
+        active={state.groupBy === 'section'}
+        label={<>Group: {state.groupBy === 'section' ? 'Section' : 'None'}</>}
+      >
+        {(close) =>
+          (['none', 'section'] as GroupBy[]).map((g) => (
+            <MenuRow
+              key={g}
+              selected={state.groupBy === g}
+              onClick={() => {
+                onChange({ groupBy: g });
+                close();
+              }}
+            >
+              {g === 'section' ? 'Group: Section' : 'Group: None'}
+            </MenuRow>
+          ))
+        }
+      </Dropdown>
+
       {/* Sort (single) */}
       <Dropdown active={state.sort !== 'name_asc'} label={<>Sort: {SORT_LABELS[state.sort]}</>}>
         {(close) =>
@@ -292,6 +421,19 @@ export function BoardToolbar({
         >
           <X size={13} /> Clear
         </button>
+      )}
+      </div>
+
+      {/* Drag-affordance hint — visible only in swimlane mode. Two lines of
+          rent that spare a class of user surprises (Option-A intuition).
+          See design-lead.md §4.3. */}
+      {state.groupBy === 'section' && (
+        <div
+          className="mt-2 text-[11px]"
+          style={{ color: 'var(--color-text3)' }}
+        >
+          Drag changes stage within a lane. Change section from the lead pane.
+        </div>
       )}
     </div>
   );

@@ -45,4 +45,37 @@ describe('leadProjection', () => {
     expect(detail.state).toBe('TX');
     expect(detail.phone).toBe('(210) 555-0199');
   });
+
+  it('surfaces state_data.section on the card projection when present', () => {
+    const card = toCard({
+      placeId: 'p1',
+      name: 'Sec Co',
+      state_data: {
+        stage: 'new',
+        section: 'Dental',
+      },
+    });
+    expect(card.section).toBe('Dental');
+  });
+
+  it('normalizes missing / undefined section to null (no undefined leaks)', () => {
+    const noState = toCard({ placeId: 'p2', name: 'No State' });
+    expect(noState.section).toBeNull();
+
+    const stateNoSection = toCard({
+      placeId: 'p3',
+      name: 'State No Section',
+      state_data: { stage: 'connected' },
+    });
+    expect(stateNoSection.section).toBeNull();
+  });
+
+  it('preserves case + spacing of stored section verbatim', () => {
+    const card = toCard({
+      placeId: 'p4',
+      name: 'Verbatim',
+      state_data: { stage: 'new', section: '  Dental Sept Trade Show ' },
+    });
+    expect(card.section).toBe('  Dental Sept Trade Show ');
+  });
 });

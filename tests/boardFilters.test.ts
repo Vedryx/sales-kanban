@@ -93,6 +93,89 @@ describe('hasActiveFilter', () => {
     // sort alone is NOT an active filter (never hides cards)
     expect(hasActiveFilter(state({ sort: 'worst_score' }))).toBe(false);
   });
+
+  it('section counts as active; groupBy does NOT', () => {
+    // Section narrowing hides cards → active.
+    expect(hasActiveFilter(state({ section: 'Dental' }))).toBe(true);
+    expect(hasActiveFilter(state({ section: '__unassigned__' }))).toBe(true);
+    // Grouping never hides cards; the blue border is a mode indicator,
+    // not a filter chip. hasActiveFilter must not surface Clear for it.
+    expect(hasActiveFilter(state({ groupBy: 'section' }))).toBe(false);
+    // Both together: only section flips it on.
+    expect(hasActiveFilter(state({ section: '', groupBy: 'section' }))).toBe(false);
+  });
+});
+
+describe('applyFilterSort — section filter', () => {
+  const SECTION_LEADS: LeadCard[] = [
+    lead({ placeId: 's1', businessName: 'Dental A', section: 'Dental' }),
+    lead({ placeId: 's2', businessName: 'Dental B', section: 'dental' }), // case drift
+    lead({ placeId: 's3', businessName: 'HVAC A', section: ' HVAC ' }), // whitespace drift
+    lead({ placeId: 's4', businessName: 'Unsectioned', section: null }),
+    lead({ placeId: 's5', businessName: 'Also unsectioned' }), // missing section
+  ];
+
+  it('empty section value → all pass through', () => {
+    const out = applyFilterSort(SECTION_LEADS, state({ section: '' }));
+    expect(out.map((l) => l.placeId).sort()).toEqual(['s1', 's2', 's3', 's4', 's5']);
+  });
+
+  it('canonical section filter matches case-insensitively', () => {
+    const out = applyFilterSort(SECTION_LEADS, state({ section: 'Dental' }));
+    expect(out.map((l) => l.placeId).sort()).toEqual(['s1', 's2']);
+  });
+
+  it('lower-case filter still matches (normalized on both sides)', () => {
+    const out = applyFilterSort(SECTION_LEADS, state({ section: 'dental' }));
+    expect(out.map((l) => l.placeId).sort()).toEqual(['s1', 's2']);
+  });
+
+  it('whitespace-padded section on a card still matches the trimmed key', () => {
+    const out = applyFilterSort(SECTION_LEADS, state({ section: 'HVAC' }));
+    expect(out.map((l) => l.placeId)).toEqual(['s3']);
+  });
+
+  it('__unassigned__ sentinel keeps only leads with no section', () => {
+    const out = applyFilterSort(SECTION_LEADS, state({ section: '__unassigned__' }));
+    expect(out.map((l) => l.placeId).sort()).toEqual(['s4', 's5']);
+  });
+
+  it('composes with vertical filter (AND-conjunctive)', () => {
+    const mixed: LeadCard[] = [
+      lead({ placeId: 'm1', businessName: 'One', section: 'Dental', vertical: 'dentist' }),
+      lead({ placeId: 'm2', businessName: 'Two', section: 'Dental', vertical: 'lawyer' }),
+      lead({ placeId: 'm3', businessName: 'Three', section: 'HVAC', vertical: 'dentist' }),
+    ];
+    const out = applyFilterSort(
+      mixed,
+      state({ section: 'Dental', vertical: 'dentist' }),
+    );
+    expect(out.map((l) => l.placeId)).toEqual(['m1']);
+  });
+
+  it('composes with score flag filter', () => {
+    const mixed: LeadCard[] = [
+      lead({
+        placeId: 'g1',
+        businessName: 'One',
+        section: 'Dental',
+        pagespeed: 20,
+        pagespeedFlag: 'red',
+      }),
+      lead({
+        placeId: 'g2',
+        businessName: 'Two',
+        section: 'Dental',
+        pagespeed: 90,
+        pagespeedFlag: 'green',
+      }),
+    ];
+    const out = applyFilterSort(
+      mixed,
+      state({ section: 'Dental', scoreFlags: ['red'] }),
+    );
+    expect(out.map((l) => l.placeId)).toEqual(['g1']);
+  });
 });
 
 describe('loadFilterState — legacy sort-key migration', () => {
@@ -135,5 +218,36 @@ describe('loadFilterState — legacy sort-key migration', () => {
     withStorage(JSON.stringify({ sort: 'total_garbage' }));
     const s = loadFilterState();
     expect(s.sort).toBe(DEFAULT_FILTER_STATE.sort);
+  });
+
+  it('legacy state without section/groupBy hydrates to defaults', () => {
+    withStorage(JSON.stringify({ sort: 'worst_score' }));
+    const s = loadFilterState();
+    expect(s.section).toBe('');
+    expect(s.groupBy).toBe('none');
+    // Other fields untouched.
+    expect(s.sort).toBe('worst_score');
+  });
+
+  it('accepts valid section string; rejects non-string as empty', () => {
+    withStorage(JSON.stringify({ section: 'Dental' }));
+    expect(loadFilterState().section).toBe('Dental');
+
+    withStorage(JSON.stringify({ section: 42 }));
+    expect(loadFilterState().section).toBe('');
+
+    withStorage(JSON.stringify({ section: null }));
+    expect(loadFilterState().section).toBe('');
+  });
+
+  it('accepts groupBy=section; anything else → none', () => {
+    withStorage(JSON.stringify({ groupBy: 'section' }));
+    expect(loadFilterState().groupBy).toBe('section');
+
+    withStorage(JSON.stringify({ groupBy: 'garbage' }));
+    expect(loadFilterState().groupBy).toBe('none');
+
+    withStorage(JSON.stringify({ groupBy: null }));
+    expect(loadFilterState().groupBy).toBe('none');
   });
 });

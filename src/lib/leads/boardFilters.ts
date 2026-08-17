@@ -1,5 +1,6 @@
 import type { LeadCard } from '@/types/lead';
 import { isUnreadReply } from './unread';
+import { UNASSIGNED_KEY, sectionKeyOf } from './sectionGrouping';
 
 // Client-side filter + sort for the board. Cards are already fully loaded
 // (getBoardLeads), so every filter/sort here is in-memory and instant — no
@@ -13,6 +14,12 @@ export type PitchStatus = 'all' | 'sent' | 'not_sent';
 // so a stale browser doesn't crash on a value not in SORT_LABELS.
 export type SortKey = 'name_asc' | 'worst_score' | 'recently_replied' | 'reminder_soonest';
 
+// Grouping mode. Not a filter — sits alongside filters/sort but has different
+// semantics: it never hides cards, only rearranges them into swimlanes. See
+// cto.md §2.5 for the intentional decoupling from `hasActiveFilter` +
+// `clearFilters`.
+export type GroupBy = 'none' | 'section';
+
 export type BoardFilterState = {
   search: string;
   // Empty array = no score filter (show all, including cards with no flag).
@@ -24,7 +31,15 @@ export type BoardFilterState = {
   // '' = all verticals (default). Otherwise a strict string-equal match on
   // LeadCard.vertical — cards with no vertical are excluded while active.
   vertical: string;
+  // '' = all sections (default). '__unassigned__' sentinel = cards with no
+  // section set. Otherwise a canonical-form section string; matched
+  // case-insensitively against a normalized key derived from LeadCard.section
+  // (see sectionKeyOf). Independent of `vertical` — two dimensions, two
+  // filters, never merged (cto.md §2.1).
+  section: string;
   sort: SortKey;
+  // Grouping mode. See GroupBy comment above.
+  groupBy: GroupBy;
 };
 
 export const DEFAULT_FILTER_STATE: BoardFilterState = {
@@ -33,7 +48,9 @@ export const DEFAULT_FILTER_STATE: BoardFilterState = {
   pitch: 'all',
   unreadOnly: false,
   vertical: '',
+  section: '',
   sort: 'name_asc',
+  groupBy: 'none',
 };
 
 export const SORT_LABELS: Record<SortKey, string> = {
@@ -43,15 +60,19 @@ export const SORT_LABELS: Record<SortKey, string> = {
   reminder_soonest: 'Reminder soonest',
 };
 
-// True when any filter is narrowing the set (search/score/pitch/unread).
-// Sort alone is not a "filter" — it never hides cards. Drives the Clear button.
+// True when any filter is narrowing the set (search/score/pitch/unread/
+// vertical/section). Sort alone is not a "filter" — it never hides cards.
+// `groupBy` is deliberately excluded (see cto.md §2.5): grouping rearranges
+// but never hides, so it never surfaces the Clear chip and is preserved
+// across Clear (same rule as `sort`). Drives the Clear button.
 export function hasActiveFilter(s: BoardFilterState): boolean {
   return (
     s.search.trim() !== '' ||
     s.scoreFlags.length > 0 ||
     s.pitch !== 'all' ||
     s.unreadOnly ||
-    s.vertical !== ''
+    s.vertical !== '' ||
+    s.section !== ''
   );
 }
 
@@ -89,6 +110,19 @@ function matchesFilter(l: LeadCard, s: BoardFilterState): boolean {
 
   // Vertical: exact match; cards with no vertical are excluded while active.
   if (s.vertical !== '' && l.vertical !== s.vertical) return false;
+
+  // Section: matched against the normalized key so casing / whitespace drift
+  // never splits a lane in half. '' = all sections; '__unassigned__' keeps
+  // only leads with no section.
+  if (s.section !== '') {
+    const cardKey = sectionKeyOf(l.section);
+    if (s.section === UNASSIGNED_KEY) {
+      if (cardKey !== UNASSIGNED_KEY) return false;
+    } else {
+      const filterKey = s.section.trim().toLowerCase();
+      if (cardKey !== filterKey) return false;
+    }
+  }
 
   return true;
 }
@@ -159,6 +193,12 @@ export function loadFilterState(): BoardFilterState {
         : [],
       // Defensive: vertical must be a string; anything else → '' (all).
       vertical: typeof parsed.vertical === 'string' ? parsed.vertical : '',
+      // Defensive: section must be a string; anything else → '' (all).
+      section: typeof parsed.section === 'string' ? parsed.section : '',
+      // Defensive: groupBy is a small enum; only 'section' flips it on.
+      // Anything unknown (including legacy state that omits the field) →
+      // 'none' so legacy boards render exactly as before.
+      groupBy: parsed.groupBy === 'section' ? 'section' : 'none',
     };
   } catch {
     return DEFAULT_FILTER_STATE;

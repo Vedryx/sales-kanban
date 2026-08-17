@@ -31,7 +31,11 @@ const VIEWPORTS = [
 ];
 
 // Views registered by /dev/preview:
-const VIEWS = ['board', 'detail', 'addlead'];
+// - board          — ungrouped board (existing behaviour)
+// - board-grouped  — swimlane mode; exercises the sales-kanban-sections work
+// - detail         — LeadDetailPane over fixture data
+// - addlead        — AddLeadModal
+const VIEWS = ['board', 'board-grouped', 'detail', 'addlead'];
 
 // Selectors we measure geometry for on each view. When a selector is missing
 // (e.g. the AddLeadModal isn't in the board view), we skip silently.
@@ -48,6 +52,14 @@ const MEASURE_SELECTORS = {
     { name: 'card_reminder_red_first', selector: '[data-reminder-state="red"]' },
     { name: 'card_reminder_yellow_first', selector: '[data-reminder-state="yellow"]' },
     { name: 'card_reminder_default_first', selector: '[data-reminder-state="default"]' },
+  ],
+  'board-grouped': [
+    { name: 'board_root', selector: 'h1' },
+    { name: 'first_lane', selector: '[data-lane-key]' },
+    { name: 'first_lane_header', selector: '[data-lane-header]' },
+    // Column in the first lane — swimlane mode wraps each lane in a
+    // [data-lane-key] container so we scope the column selector to it.
+    { name: 'first_lane_first_column', selector: '[data-lane-key]:nth-of-type(1) [data-lane-header] ~ div > div' },
   ],
   detail: [
     { name: 'detail_aside', selector: 'aside' },
@@ -139,10 +151,179 @@ async function main() {
             innerWidth: window.innerWidth,
             innerHeight: window.innerHeight,
           }));
+
+          // Swimlane-only assertions (design-lead.md §7). These are the
+          // numeric evidence the founder's "no visually verified without
+          // numbers" rule demands. Every claim in §2.2 has a check here.
+          let swimlane = null;
+          if (view === 'board-grouped') {
+            swimlane = await page.evaluate((vpWidth) => {
+              // Tolerance helpers per §7:
+              //   #1 scrollWidth ≤ viewport
+              //   #2 lane header height 40 (±1)
+              //   #3 collapsed lane total height 40 (±1) — measured on click
+              //   #4 column width 318.75 (±1) @375, 260 (±0.5) @768/1280
+              //   #5 column body max-height 240 @375, 296 @768/1280
+              //   #6 per-lane scroller scrollWidth > clientWidth
+              //     + second lane independence: scrolling first stays 0 on second
+              const lanes = Array.from(document.querySelectorAll('[data-lane-key]'));
+              const firstLane = lanes[0] ?? null;
+              const secondLane = lanes[1] ?? null;
+              const firstLaneHeader = firstLane?.querySelector('[data-lane-header]') ?? null;
+              const firstLaneScroller =
+                firstLane?.querySelector('[data-lane-header] ~ div') ?? null;
+              const secondLaneScroller =
+                secondLane?.querySelector('[data-lane-header] ~ div') ?? null;
+              const firstLaneFirstColumn = firstLaneScroller?.firstElementChild ?? null;
+              // Column body is the second child of the column (header first).
+              const firstLaneFirstColumnBody =
+                firstLaneFirstColumn?.querySelector(':scope > div:nth-child(2)') ?? null;
+
+              const laneHeaderH = firstLaneHeader?.getBoundingClientRect().height ?? null;
+              const columnRect = firstLaneFirstColumn?.getBoundingClientRect() ?? null;
+              const columnBodyMaxH = firstLaneFirstColumnBody
+                ? parseFloat(getComputedStyle(firstLaneFirstColumnBody).maxHeight)
+                : null;
+
+              // Column width targets: 318.75 (±1) @375, 260 (±0.5) @768/1280.
+              const expectedColumnWidth = vpWidth === 375 ? 318.75 : 260;
+              const columnWidthTol = vpWidth === 375 ? 1 : 0.5;
+              const columnWidthOk =
+                columnRect != null &&
+                Math.abs(columnRect.width - expectedColumnWidth) <= columnWidthTol;
+
+              // Column body max-height targets: 240 @375, 296 @768/1280.
+              const expectedBodyMax = vpWidth === 375 ? 240 : 296;
+              const columnBodyMaxOk =
+                columnBodyMaxH != null && Math.abs(columnBodyMaxH - expectedBodyMax) <= 1;
+
+              // Per-lane scroller scrollWidth > clientWidth.
+              const firstLaneScrollerScrollW = firstLaneScroller?.scrollWidth ?? null;
+              const firstLaneScrollerClientW = firstLaneScroller?.clientWidth ?? null;
+              const secondLaneScrollerScrollW = secondLaneScroller?.scrollWidth ?? null;
+              const secondLaneScrollerClientW = secondLaneScroller?.clientWidth ?? null;
+
+              // Independence check — snapshot second lane's initial
+              // scrollLeft (may be non-zero when scroll-snap + padding
+              // combine to move the initial position), scroll the first
+              // lane, then assert the second lane's scrollLeft is
+              // unchanged. Comparing to `=== 0` would false-negative on
+              // the mobile edge-bleed layout where snap-mandatory rests
+              // the scroller at a positive offset.
+              let independenceOk = null;
+              let firstLaneScrollBefore = null;
+              let firstLaneScrollAfter = null;
+              let secondLaneScrollBefore = null;
+              let secondLaneScrollAfter = null;
+              let sameScrollerRef = null;
+              if (firstLaneScroller && secondLaneScroller) {
+                sameScrollerRef = firstLaneScroller === secondLaneScroller;
+                firstLaneScrollBefore = firstLaneScroller.scrollLeft;
+                secondLaneScrollBefore = secondLaneScroller.scrollLeft;
+                const step = (columnRect?.width ?? 260) + 12;
+                firstLaneScroller.scrollLeft = step;
+                firstLaneScrollAfter = firstLaneScroller.scrollLeft;
+                secondLaneScrollAfter = secondLaneScroller.scrollLeft;
+                independenceOk =
+                  !sameScrollerRef && secondLaneScrollAfter === secondLaneScrollBefore;
+              }
+
+              return {
+                laneCount: lanes.length,
+                laneHeaderHeightPx: laneHeaderH,
+                laneHeaderHeightOk:
+                  laneHeaderH != null && Math.abs(laneHeaderH - 40) <= 1,
+                columnWidthPx: columnRect?.width ?? null,
+                columnWidthOk,
+                columnBodyMaxHeightPx: columnBodyMaxH,
+                columnBodyMaxHeightOk: columnBodyMaxOk,
+                firstLaneScrollerScrollW,
+                firstLaneScrollerClientW,
+                firstLaneScrollerHasOverflow:
+                  firstLaneScrollerScrollW != null &&
+                  firstLaneScrollerClientW != null &&
+                  firstLaneScrollerScrollW > firstLaneScrollerClientW,
+                secondLaneScrollerScrollW,
+                secondLaneScrollerClientW,
+                secondLaneScrollerHasOverflow:
+                  secondLaneScrollerScrollW != null &&
+                  secondLaneScrollerClientW != null &&
+                  secondLaneScrollerScrollW > secondLaneScrollerClientW,
+                laneIndependenceOk: independenceOk,
+                laneIndependenceDebug: {
+                  firstLaneScrollBefore,
+                  firstLaneScrollAfter,
+                  secondLaneScrollBefore,
+                  secondLaneScrollAfter,
+                  sameScrollerRef,
+                },
+              };
+            }, vp.width);
+
+            // Collapsed-lane assertion (#3) — click the first lane header
+            // to collapse it, remeasure the lane total height.
+            try {
+              await page.locator('[data-lane-header]').first().click();
+              await delay(150);
+              const collapsed = await page.evaluate(() => {
+                const lane = document.querySelector('[data-lane-key]');
+                return lane ? lane.getBoundingClientRect().height : null;
+              });
+              swimlane.collapsedLaneHeightPx = collapsed;
+              swimlane.collapsedLaneHeightOk =
+                collapsed != null && Math.abs(collapsed - 40) <= 1;
+              // Reset — expand again so subsequent screenshots reflect
+              // the default state.
+              await page.locator('[data-lane-header]').first().click();
+              await delay(100);
+            } catch (err) {
+              swimlane.collapsedLaneError = err.message?.split('\n')[0] ?? String(err);
+            }
+
+            // #1 doc scrollWidth ≤ viewport
+            swimlane.pageOverflowOk = doc.scrollWidth <= vp.width;
+
+            // Take an extra collapsed-state screenshot for the artifact set.
+            try {
+              await page.locator('[data-lane-header]').first().click();
+              await delay(150);
+              const collapsedShot = path.join(
+                EVIDENCE_DIR,
+                `${view}-collapsed-${vp.name}.png`,
+              );
+              await page.screenshot({ path: collapsedShot, fullPage: false });
+              swimlane.collapsedScreenshot = path.basename(collapsedShot);
+              await page.locator('[data-lane-header]').first().click();
+              await delay(100);
+            } catch (err) {
+              swimlane.collapsedScreenshotError = err.message?.split('\n')[0] ?? String(err);
+            }
+
+            // Open the Section filter dropdown for a shot of the menu.
+            try {
+              await page.locator('button:has-text("Section:")').first().click();
+              await delay(120);
+              const menuShot = path.join(
+                EVIDENCE_DIR,
+                `${view}-section-menu-${vp.name}.png`,
+              );
+              await page.screenshot({ path: menuShot, fullPage: false });
+              swimlane.sectionMenuScreenshot = path.basename(menuShot);
+              // Close by pressing Escape so subsequent measurements aren't
+              // affected by the open portal.
+              await page.keyboard.press('Escape');
+              await delay(80);
+            } catch (err) {
+              swimlane.sectionMenuScreenshotError =
+                err.message?.split('\n')[0] ?? String(err);
+            }
+          }
+
           geometry.viewports[vp.name].views[view] = {
             screenshot: path.basename(shotPath),
             doc,
             measured,
+            ...(swimlane ? { swimlane } : {}),
           };
         } catch (err) {
           console.error(`[mobile-evidence] ${view} @${vp.name} FAILED:`, err.message);

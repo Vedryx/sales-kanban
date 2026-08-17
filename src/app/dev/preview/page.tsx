@@ -5,6 +5,7 @@ import { Board } from '@/components/kanban/Board';
 import { PreviewSurface } from './PreviewSurface';
 import type { LeadCard } from '@/types/lead';
 import { addDaysLocal, todayLocalDateString } from '@/lib/leads/reminderState';
+import { DEFAULT_FILTER_STATE } from '@/lib/leads/boardFilters';
 
 // Dev-only preview page for mobile-responsive verification.
 // Renders one of three surfaces (?view=board | detail | addlead) with
@@ -40,6 +41,7 @@ function buildFixtures(): LeadCard[] {
       city: 'Austin',
       state: 'TX',
       vertical: 'dentist',
+      section: 'Dental',
       pagespeed: 42,
       pagespeedFlag: 'red',
       website: 'https://sunrise-dental.example',
@@ -56,6 +58,9 @@ function buildFixtures(): LeadCard[] {
       city: 'San Jose',
       state: 'CA',
       vertical: 'lawyer',
+      // Unsectioned on purpose — exercises the Unassigned lane in
+      // swimlane mode and the empty-section state elsewhere.
+      section: null,
       pagespeed: 71,
       pagespeedFlag: 'amber',
       website: 'https://bayfamlaw.example',
@@ -76,6 +81,7 @@ function buildFixtures(): LeadCard[] {
       city: 'Seattle',
       state: 'WA',
       vertical: 'hvac',
+      section: 'HVAC',
       pagespeed: 88,
       pagespeedFlag: 'green',
       website: 'https://peak-hvac.example',
@@ -96,6 +102,7 @@ function buildFixtures(): LeadCard[] {
       city: 'Portland',
       state: 'OR',
       vertical: 'realtor',
+      section: null,
       pagespeed: 55,
       pagespeedFlag: 'amber',
       website: 'https://redwood.example',
@@ -112,6 +119,7 @@ function buildFixtures(): LeadCard[] {
       city: 'Minneapolis',
       state: 'MN',
       vertical: 'auto',
+      section: 'HVAC',
       pagespeed: 33,
       pagespeedFlag: 'red',
       website: 'https://northlake.example',
@@ -125,6 +133,23 @@ function buildFixtures(): LeadCard[] {
       assignedTo: 'sdr@vedryxtech.com',
       hasEmail: true,
       hasPitchEmailSent: true,
+    },
+    {
+      placeId: 'fx-6',
+      businessName: 'Cedar Family Dentistry',
+      city: 'Denver',
+      state: 'CO',
+      vertical: 'dentist',
+      section: 'Dental',
+      pagespeed: 60,
+      pagespeedFlag: 'amber',
+      website: 'https://cedardental.example',
+      stage: 'connected',
+      nextReminderAt: R.farOut,
+      latestMeetingSummary: null,
+      assignedTo: 'sdr@vedryxtech.com',
+      hasEmail: true,
+      hasPitchEmailSent: false,
     },
   ];
 }
@@ -145,6 +170,22 @@ export default async function DevPreviewPage({
           <Sidebar />
           <main className="flex-1 overflow-hidden">
             <Board initialLeads={FIXTURE_LEADS} />
+          </main>
+        </div>
+      </Providers>
+    );
+  }
+
+  if (view === 'board-grouped') {
+    return (
+      <Providers>
+        <div className="flex h-screen w-screen flex-col overflow-hidden lg:flex-row">
+          <Sidebar />
+          <main className="flex-1 overflow-hidden">
+            <Board
+              initialLeads={FIXTURE_LEADS}
+              initialFilters={{ ...DEFAULT_FILTER_STATE, groupBy: 'section' }}
+            />
           </main>
         </div>
       </Providers>

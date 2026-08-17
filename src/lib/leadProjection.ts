@@ -51,6 +51,8 @@ export type RawLeadDoc = {
     lastNote?: string | null;
     assignedTo?: string | null;
     email?: string | null; // SDR override (lives on sk_lead_state)
+    // Human-set section tag (nullable). See sales-kanban-sections work.
+    section?: string | null;
     pitchEmailSentAt?: string | null;
     pitchEmailLastError?: string | null;
     unreadReplyAt?: string | null;
@@ -146,6 +148,7 @@ export function toCard(raw: RawLeadDoc): LeadCard {
     pagespeedFlag: raw.pagespeedFlag,
     website: raw.website,
     stage: s.stage ?? 'new',
+    section: s.section ?? null,
     nextReminderAt: effectiveReminderDate(raw),
     latestMeetingSummary: latestSummaryPreview(summaries),
     assignedTo: s.assignedTo ?? null,

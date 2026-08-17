@@ -12,6 +12,11 @@ export type LeadCard = {
   // bridge on lead create; also filterable on the board. Optional so legacy
   // rows without the field don't need a backfill migration.
   vertical?: string;
+  // Human-set section — an SDR-typed taxonomy tag, independent of `vertical`.
+  // Persisted on sk_lead_state (see sales-kanban-sections work). Case
+  // preserved as typed; normalized only for autocomplete / grouping /
+  // filtering. `null` and missing both mean "unsectioned".
+  section?: string | null;
   pagespeed?: number;
   pagespeedFlag?: 'red' | 'amber' | 'green';
   website?: string;

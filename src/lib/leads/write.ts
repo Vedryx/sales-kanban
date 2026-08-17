@@ -279,6 +279,10 @@ export async function patchLeadState(opts: {
     // lead. Cleared (or surpassed by lastReadReplyAt) when SDR opens detail.
     unreadReplyAt: string | null;
     lastReadReplyAt: string | null;
+    // Human-set section tag. `null` clears; string persists as typed
+    // (case + spacing preserved) — normalization is applied only at the
+    // API boundary before this helper is called.
+    section: string | null;
   }>;
 }) {
   const db = await getDb();
