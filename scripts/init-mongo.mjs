@@ -35,6 +35,9 @@ const INDEXES = {
     { keys: { assignedTo: 1, nextActionAt: 1 } },
     { keys: { stage: 1, nextReminderAt: 1 } },
     { keys: { assignedTo: 1, nextReminderAt: 1 } },
+    // Section — human-set taxonomy tag (sales-kanban-sections work).
+    // Filter/grouping perf hedge; keeps schema honest.
+    { keys: { section: 1 } },
   ],
 };
 

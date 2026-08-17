@@ -13,6 +13,7 @@ const m = vi.hoisted(() => ({
   runObservatoryMock: vi.fn(),
   patchPagespeedMock: vi.fn(),
   patchSecurityMock: vi.fn(),
+  patchStateMock: vi.fn(),
 }));
 
 vi.mock('../auth', () => ({ auth: m.authMock }));
@@ -21,6 +22,7 @@ vi.mock('@/lib/leads/write', () => ({
   createManualLead: m.createLeadMock,
   patchLeadPagespeed: m.patchPagespeedMock,
   patchLeadSecurity: m.patchSecurityMock,
+  patchLeadState: m.patchStateMock,
 }));
 
 vi.mock('@/lib/pagespeed/run', () => ({ runPagespeed: m.runPagespeedMock }));
@@ -123,5 +125,41 @@ describe('POST /api/leads schema', () => {
     const res = await POST(jsonReq({ businessName: 'A' }));
     expect(res.status).toBe(401);
     expect(m.createLeadMock).not.toHaveBeenCalled();
+  });
+
+  it('accepts and forwards optional section — chains patchLeadState + returns section on the card', async () => {
+    m.patchStateMock.mockResolvedValue(undefined);
+    const res = await POST(jsonReq({ businessName: 'Acme Inc', section: 'Dental' }));
+    expect(res.status).toBe(200);
+    // createManualLead is called WITHOUT section (section is not part of
+    // valid_pulse_leads; it lives on sk_lead_state).
+    expect(m.createLeadMock).toHaveBeenCalledOnce();
+    expect(m.createLeadMock.mock.calls[0][0].section).toBeUndefined();
+    // patchLeadState is called with { section: 'Dental' }.
+    expect(m.patchStateMock).toHaveBeenCalledOnce();
+    const patchArg = m.patchStateMock.mock.calls[0][0];
+    expect(patchArg.placeId).toBe('manual:test-1');
+    expect(patchArg.patch).toEqual({ section: 'Dental' });
+    // Response carries the section merged onto the returned card so the
+    // Board's onCreated handler doesn't need to re-fetch.
+    const body = await res.json();
+    expect(body.lead.section).toBe('Dental');
+  });
+
+  it('trims whitespace on section (empty after trim → omitted, no patchLeadState call)', async () => {
+    const res = await POST(jsonReq({ businessName: 'Acme', section: '   ' }));
+    expect(res.status).toBe(200);
+    expect(m.createLeadMock).toHaveBeenCalledOnce();
+    expect(m.patchStateMock).not.toHaveBeenCalled();
+    const body = await res.json();
+    expect(body.lead.section).toBeUndefined();
+  });
+
+  it('rejects section over 60 chars', async () => {
+    const long = 'a'.repeat(61);
+    const res = await POST(jsonReq({ businessName: 'Acme', section: long }));
+    expect(res.status).toBe(400);
+    expect(m.createLeadMock).not.toHaveBeenCalled();
+    expect(m.patchStateMock).not.toHaveBeenCalled();
   });
 });

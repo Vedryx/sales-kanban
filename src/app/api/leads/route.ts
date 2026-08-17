@@ -1,7 +1,12 @@
 import { NextResponse, after } from 'next/server';
 import { z } from 'zod';
 import { auth } from '../../../../auth';
-import { createManualLead, patchLeadPagespeed, patchLeadSecurity } from '@/lib/leads/write';
+import {
+  createManualLead,
+  patchLeadPagespeed,
+  patchLeadSecurity,
+  patchLeadState,
+} from '@/lib/leads/write';
 import { runPagespeed } from '@/lib/pagespeed/run';
 import { runObservatory } from '@/lib/observatory/run';
 
@@ -27,6 +32,16 @@ const optionalEmail = z
   .transform((v) => (v && v.trim() !== '' ? v.trim() : undefined))
   .pipe(z.string().email().optional());
 
+// Section — free-text taxonomy tag (see sales-kanban-sections work). Same
+// trim + empty→undefined coercion as the other optional text fields; the
+// PATCH /state route re-normalizes on the write path (empty → null there).
+// Capped at 60 chars to match the PATCH boundary.
+const optionalSection = z
+  .string()
+  .max(60)
+  .optional()
+  .transform((v) => (v && v.trim() !== '' ? v.trim() : undefined));
+
 const Body = z.object({
   businessName: z.string().trim().min(1),
   website: optionalUrl,
@@ -35,6 +50,7 @@ const Body = z.object({
   state: optionalText,
   phone: optionalText,
   ownerName: optionalText,
+  section: optionalSection,
 });
 
 export const dynamic = 'force-dynamic';
@@ -55,11 +71,36 @@ export async function POST(req: Request) {
     );
   }
 
+  // Split section out — createManualLead writes valid_pulse_leads only;
+  // section lives on sk_lead_state and is upserted via patchLeadState.
+  const { section, ...manualLeadFields } = parsed.data;
   const card = await createManualLead({
-    ...parsed.data,
+    ...manualLeadFields,
     sdrEmail: session.user.email,
     sdrName: session.user.name ?? undefined,
   });
+
+  // If the SDR set a section at add-lead time, upsert it onto the state
+  // doc via the same helper the PATCH /state route uses. Kept as a chained
+  // call (rather than widening createManualLead) so the two write paths
+  // stay one-collection-each — see cto.md §2.1 boundary reasoning.
+  let responseCard = card;
+  if (section) {
+    try {
+      await patchLeadState({
+        placeId: card.placeId,
+        sdrEmail: session.user.email,
+        patch: { section },
+      });
+      responseCard = { ...card, section };
+    } catch (err) {
+      // Non-fatal — the lead exists; SDR can set the section from the pane.
+      console.warn(
+        `[lead-create] section upsert failed for ${card.placeId}:`,
+        (err as Error).message,
+      );
+    }
+  }
 
   // Async scoring — runs after the response is sent so the SDR isn't blocked.
   // PSI (~20-40s) and Observatory (~2-8s) run in parallel via allSettled so
@@ -97,5 +138,5 @@ export async function POST(req: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true, lead: card });
+  return NextResponse.json({ ok: true, lead: responseCard });
 }

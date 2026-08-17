@@ -49,6 +49,7 @@ export async function getBoardLeads(): Promise<LeadCard[]> {
         'state_data.stage': 1,
         'state_data.assignedTo': 1,
         'state_data.email': 1,
+        'state_data.section': 1,
         'state_data.pitchEmailSentAt': 1,
         'state_data.unreadReplyAt': 1,
         'state_data.lastReadReplyAt': 1,

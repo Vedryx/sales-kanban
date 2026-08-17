@@ -18,6 +18,18 @@ const Body = z.object({
     .union([z.string().email(), z.literal(''), z.null()])
     .optional()
     .transform((v) => (v === '' ? null : v)),
+  // Human-set section tag. Trimmed + empty → null so the API is the single
+  // normalization point (blur handlers in the UI also normalize, but the
+  // server is the authority). 60-char cap is a wire-size / adversarial-input
+  // hedge — real section labels are much shorter.
+  section: z
+    .union([z.string().max(60), z.null()])
+    .optional()
+    .transform((v) => {
+      if (v == null) return v; // undefined stays undefined (no-op); null clears
+      const t = v.trim();
+      return t === '' ? null : t;
+    }),
 });
 
 export const dynamic = 'force-dynamic';

@@ -31,6 +31,7 @@ export function PreviewSurface({ view }: { view: string }) {
         city: 'Austin',
         state: 'TX',
         vertical: 'dentist',
+        section: 'Dental',
         pagespeed: 42,
         pagespeedFlag: 'red',
         website: 'https://sunrise-dental.example',
@@ -125,6 +126,7 @@ export function PreviewSurface({ view }: { view: string }) {
       <div className="min-h-screen w-screen" style={{ background: 'var(--color-bg)' }}>
         <LeadDetailPane
           placeId="fx-detail"
+          sectionOptions={['Dental', 'HVAC']}
           onClose={() => {
             /* no-op */
           }}
@@ -146,6 +148,7 @@ export function PreviewSurface({ view }: { view: string }) {
     return (
       <div className="min-h-screen w-screen" style={{ background: 'var(--color-bg)' }}>
         <AddLeadModal
+          sectionOptions={['Dental', 'HVAC']}
           onClose={() => {
             /* no-op */
           }}

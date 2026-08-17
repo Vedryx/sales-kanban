@@ -5,6 +5,7 @@ import type { LeadDetail, MeetingSummary } from '@/types/lead';
 import type { Activity } from '@/types/activity';
 import { LOST_OR_DNC } from '@/lib/stages';
 import { reminderChipLabel, reminderCardState } from '@/lib/leads/reminderState';
+import { canonicalizeSection } from '@/lib/leads/sectionGrouping';
 import { PitchEmailModal } from './PitchEmailModal';
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog';
 
@@ -27,18 +28,25 @@ export function LeadDetailPane({
   onBook,
   onPatched,
   onDeleted,
+  sectionOptions = [],
 }: {
   placeId: string;
   onClose: () => void;
   onBook: (leadEmail?: string) => void;
   onPatched: (patch: Partial<LeadDetail>) => void;
   onDeleted: (placeId: string) => void;
+  // Canonical section labels for the pane's datalist autocomplete. Empty
+  // list still renders the input so an SDR can seed the first section on
+  // this board. Distinct <datalist id> from the AddLead modal (both may be
+  // mounted concurrently — QA-critic §I).
+  sectionOptions?: string[];
 }) {
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [futureMeetings, setFutureMeetings] = useState<number>(0);
   const [reminder, setReminder] = useState('');
   const [email, setEmail] = useState<string>('');
+  const [section, setSection] = useState<string>('');
   const [pitchModalOpen, setPitchModalOpen] = useState(false);
   const [pitchEmailEnabled, setPitchEmailEnabled] = useState<boolean>(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -79,6 +87,7 @@ export function LeadDetailPane({
         setFutureMeetings(d.futureMeetings ?? 0);
         setReminder(d.lead?.nextReminderAt ?? '');
         setEmail(d.lead?.email ?? '');
+        setSection(d.lead?.section ?? '');
       });
     // Mark read on open. Idempotent — the endpoint just sets
     // lastReadReplyAt = now. We don't block detail-pane render on its
@@ -121,6 +130,7 @@ export function LeadDetailPane({
   async function patchState(patch: Partial<{
     nextReminderAt: string | null;
     email: string | null;
+    section: string | null;
   }>) {
     await fetch(`/api/leads/${encodeURIComponent(placeId)}/state`, {
       method: 'PATCH',
@@ -137,11 +147,24 @@ export function LeadDetailPane({
         prev ? { ...prev, nextReminderAt: patch.nextReminderAt ?? null } : prev,
       );
     }
+    if ('section' in patch) {
+      setLead((prev) =>
+        prev ? { ...prev, section: patch.section ?? null } : prev,
+      );
+    }
     // The board's optimistic update consumes the card-shape Partial. `email`
-    // never goes on the card, so strip it before passing up.
+    // never goes on the card, so strip it before passing up. `section` and
+    // `nextReminderAt` DO go on the card and stay in the patch so the
+    // board's swimlane re-buckets on the next render.
     const { email: _omit, ...cardPatch } = patch as Record<string, unknown>;
     void _omit;
     onPatched(cardPatch as Partial<LeadDetail>);
+  }
+
+  function commitSection(next: string) {
+    const canonical = canonicalizeSection(next, sectionOptions);
+    setSection(canonical);
+    patchState({ section: canonical === '' ? null : canonical });
   }
 
   function commitReminder(next: string) {
@@ -315,6 +338,37 @@ export function LeadDetailPane({
                 last error: {lead.pitchEmailLastError}
               </div>
             )}
+          </div>
+
+          {/* Section — human-set taxonomy tag. Free-text + <datalist>
+              autocomplete against the board's canonical sectionOptions.
+              Blur commits via patchState({ section }); empty clears (card
+              moves to Unassigned lane in swimlane mode). Distinct
+              <datalist id> from the AddLead modal so both can be mounted
+              concurrently. Design §5.2. */}
+          <div>
+            <Label>Section</Label>
+            <input
+              type="text"
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              onBlur={(e) => commitSection(e.target.value)}
+              placeholder="e.g. Dental, HVAC, Sept trade show"
+              list="sk-sections-pane"
+              maxLength={60}
+              className="w-full rounded-md border px-3 py-2 text-[13px]"
+              style={{
+                background: 'var(--color-surface)',
+                borderColor: 'var(--color-border2)',
+                color: 'var(--color-text)',
+              }}
+              aria-label="Section"
+            />
+            <datalist id="sk-sections-pane">
+              {sectionOptions.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
           </div>
 
           {/* Meeting summaries — primary block (design §4.2). Expanded by

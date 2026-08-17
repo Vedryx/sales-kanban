@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import type { LeadCard } from '@/types/lead';
+import { canonicalizeSection } from '@/lib/leads/sectionGrouping';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // Lenient client check; the server validates with z.string().url(). We normalize
@@ -17,9 +18,14 @@ function normalizeUrl(raw: string): string {
 export function AddLeadModal({
   onClose,
   onCreated,
+  sectionOptions = [],
 }: {
   onClose: () => void;
   onCreated: (lead: LeadCard) => void;
+  // Canonical section labels for the datalist. Empty list still renders
+  // the input — the SDR can type a brand-new section on the first lead
+  // that carries it.
+  sectionOptions?: string[];
 }) {
   const [businessName, setBusinessName] = useState('');
   const [website, setWebsite] = useState('');
@@ -28,6 +34,7 @@ export function AddLeadModal({
   const [stateField, setStateField] = useState('');
   const [phone, setPhone] = useState('');
   const [ownerName, setOwnerName] = useState('');
+  const [section, setSection] = useState('');
   const [firstSummary, setFirstSummary] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -53,6 +60,7 @@ export function AddLeadModal({
     try {
       const websiteTrimmed = website.trim();
       const emailTrimmed = email.trim();
+      const sectionTrimmed = section.trim();
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -64,6 +72,7 @@ export function AddLeadModal({
           state: stateField.trim() || undefined,
           phone: phone.trim() || undefined,
           ownerName: ownerName.trim() || undefined,
+          section: sectionTrimmed || undefined,
         }),
       });
       const data = await res.json().catch(() => null);
@@ -161,6 +170,32 @@ export function AddLeadModal({
               <TextInput value={ownerName} onChange={setOwnerName} placeholder="Jane Doe" />
             </Field>
           </div>
+
+          <Field label="Section">
+            {/* Free-text with native <datalist> autocomplete. On blur we
+                canonicalize against the passed-in sectionOptions so
+                "Dental" / "dental" / " dental " collapse to the first-
+                seen spelling silently. `sk-sections-modal` is distinct
+                from the pane's list id — both surfaces can be mounted
+                concurrently (QA-critic §I / cto-design-review.md §4.7). */}
+            <input
+              value={section}
+              onChange={(e) => setSection(e.target.value)}
+              onBlur={() =>
+                setSection((v) => canonicalizeSection(v, sectionOptions))
+              }
+              placeholder="Dental, HVAC, Sept trade show…"
+              list="sk-sections-modal"
+              maxLength={60}
+              className="w-full rounded-md border bg-transparent px-3 py-2 text-[13px] outline-none"
+              style={{ borderColor: 'var(--color-border2)', color: 'var(--color-text)' }}
+            />
+            <datalist id="sk-sections-modal">
+              {sectionOptions.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
 
           <Field label="First meeting summary (optional)">
             <textarea
